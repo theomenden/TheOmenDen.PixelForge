@@ -1,0 +1,42 @@
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!--
+        App-specific brushes only. Anything the WinUI system brushes already cover is NOT
+        redefined here — see references/approved-brushes.md. Every key is a StaticResource
+        redirect to a system brush (zero allocation) rather than a new SolidColorBrush,
+        and all three theme variants are defined so runtime switching works.
+    -->
+    <ResourceDictionary.ThemeDictionaries>
+
+        <ResourceDictionary x:Key="Light">
+            <!-- Backdrop behind the sprite canvas — deliberately darker than the page so
+                 light-coloured sprites stay readable against it. -->
+            <StaticResource x:Key="CanvasBackdropBrush" ResourceKey="LayerOnMicaBaseAltFillColorSecondaryBrush" />
+            <StaticResource x:Key="CanvasCheckerLightBrush" ResourceKey="ControlFillColorDefaultBrush" />
+            <StaticResource x:Key="CanvasCheckerDarkBrush" ResourceKey="ControlFillColorSecondaryBrush" />
+            <StaticResource x:Key="ToolPanelBackgroundBrush" ResourceKey="LayerFillColorDefaultBrush" />
+            <StaticResource x:Key="ToolPanelBorderBrush" ResourceKey="CardStrokeColorDefaultBrush" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="Dark">
+            <StaticResource x:Key="CanvasBackdropBrush" ResourceKey="LayerOnMicaBaseAltFillColorSecondaryBrush" />
+            <StaticResource x:Key="CanvasCheckerLightBrush" ResourceKey="ControlFillColorSecondaryBrush" />
+            <StaticResource x:Key="CanvasCheckerDarkBrush" ResourceKey="ControlFillColorDefaultBrush" />
+            <StaticResource x:Key="ToolPanelBackgroundBrush" ResourceKey="LayerFillColorDefaultBrush" />
+            <StaticResource x:Key="ToolPanelBorderBrush" ResourceKey="CardStrokeColorDefaultBrush" />
+        </ResourceDictionary>
+
+        <ResourceDictionary x:Key="HighContrast">
+            <!-- Only the 8 permitted system colour brushes are legal here: no accent
+                 colours, no opacity, no regular WinUI brushes. -->
+            <StaticResource x:Key="CanvasBackdropBrush" ResourceKey="SystemColorWindowColorBrush" />
+            <StaticResource x:Key="CanvasCheckerLightBrush" ResourceKey="SystemColorWindowColorBrush" />
+            <StaticResource x:Key="CanvasCheckerDarkBrush" ResourceKey="SystemColorButtonFaceColorBrush" />
+            <StaticResource x:Key="ToolPanelBackgroundBrush" ResourceKey="SystemColorWindowColorBrush" />
+            <StaticResource x:Key="ToolPanelBorderBrush" ResourceKey="SystemColorWindowTextColorBrush" />
+        </ResourceDictionary>
+
+    </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

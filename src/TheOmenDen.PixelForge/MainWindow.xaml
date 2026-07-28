@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="TheOmenDen.PixelForge.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:TheOmenDen.PixelForge"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="TheOmenDen.PixelForge"
+    mc:Ignorable="d">
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <TitleBar
+            x:Name="AppTitleBar"
+            Title="TheOmenDen.PixelForge"
+            BackRequested="OnTitleBarBackRequested"
+            IsBackButtonVisible="{x:Bind RootFrame.CanGoBack, Mode=OneWay}"
+            IsPaneToggleButtonVisible="True"
+            PaneToggleRequested="OnTitleBarPaneToggleRequested">
+            <TitleBar.IconSource>
+                <ImageIconSource ImageSource="Assets/AppIcon.ico" />
+            </TitleBar.IconSource>
+        </TitleBar>
+
+        <!--
+            PaneDisplayMode="Auto" is the responsive shell: NavigationView switches between
+            Expanded / Compact / Minimal at its own breakpoints, so no AdaptiveTrigger is
+            needed here. Back and pane-toggle live on the TitleBar, so they are collapsed.
+        -->
+        <NavigationView
+            x:Name="NavView"
+            Grid.Row="1"
+            AutomationProperties.AutomationId="NavView"
+            IsBackButtonVisible="Collapsed"
+            IsPaneToggleButtonVisible="False"
+            IsSettingsVisible="True"
+            PaneDisplayMode="Auto"
+            SelectionChanged="OnNavigationSelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="NavCanvas"
+                    Content="Canvas"
+                    Tag="Canvas">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE70F;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="NavAssets"
+                    Content="Assets"
+                    Tag="Assets">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8B7;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem
+                    AutomationProperties.AutomationId="NavPipeline"
+                    Content="Pipeline"
+                    Tag="Pipeline">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE9F5;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Frame x:Name="RootFrame" />
+        </NavigationView>
+    </Grid>
+</Window>

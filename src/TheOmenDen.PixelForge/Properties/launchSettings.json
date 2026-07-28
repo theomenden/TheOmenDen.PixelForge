@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "TheOmenDen.PixelForge (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "TheOmenDen.PixelForge (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

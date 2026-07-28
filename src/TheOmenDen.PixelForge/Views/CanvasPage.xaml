@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="TheOmenDen.PixelForge.Views.CanvasPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid
+        x:Name="RootGrid"
+        ColumnSpacing="0"
+        SizeChanged="OnRootSizeChanged">
+
+        <!--
+            Shell responsiveness is NavigationView's job (PaneDisplayMode="Auto"). These states
+            handle what it cannot: below 900 effective DIPs the tool panel drops from a
+            labelled 280px column to a 56px icon strip, so the canvas keeps usable width.
+
+            No AdaptiveTrigger here on purpose — MinWindowWidth compares against raw window
+            pixels, so on a 150% display a 900 threshold does not fire until 600 DIPs. The
+            code-behind divides by XamlRoot.RasterizationScale and calls GoToState, which is
+            correct at every DPI. Verified on a 144-DPI monitor.
+        -->
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="ToolPanelStates">
+                <VisualState x:Name="ToolPanelWide" />
+                <VisualState x:Name="ToolPanelCompact">
+                    <VisualState.Setters>
+                        <Setter Target="ToolPanelColumn.Width" Value="56" />
+                        <Setter Target="ToolLabels.Visibility" Value="Collapsed" />
+                        <Setter Target="ToolPanel.Padding" Value="8" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition x:Name="ToolPanelColumn" Width="280" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!--  Tools  -->
+        <Border
+            x:Name="ToolPanel"
+            Padding="16"
+            Background="{ThemeResource ToolPanelBackgroundBrush}"
+            BorderBrush="{ThemeResource ToolPanelBorderBrush}"
+            BorderThickness="0,0,1,0">
+            <StackPanel Spacing="8">
+                <TextBlock
+                    x:Name="ToolLabels"
+                    Style="{StaticResource BodyStrongTextBlockStyle}"
+                    Text="Tools" />
+
+                <Button
+                    AutomationProperties.AutomationId="BtnToolPencil"
+                    AutomationProperties.Name="Pencil tool"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Left"
+                    ToolTipService.ToolTip="Pencil">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <FontIcon FontSize="16" Glyph="&#xE70F;" />
+                        <TextBlock Text="Pencil" Visibility="{x:Bind ToolLabels.Visibility, Mode=OneWay}" />
+                    </StackPanel>
+                </Button>
+
+                <Button
+                    AutomationProperties.AutomationId="BtnToolFill"
+                    AutomationProperties.Name="Fill tool"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Left"
+                    ToolTipService.ToolTip="Fill">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <FontIcon FontSize="16" Glyph="&#xE7B3;" />
+                        <TextBlock Text="Fill" Visibility="{x:Bind ToolLabels.Visibility, Mode=OneWay}" />
+                    </StackPanel>
+                </Button>
+
+                <Button
+                    AutomationProperties.AutomationId="BtnToolEraser"
+                    AutomationProperties.Name="Eraser tool"
+                    HorizontalAlignment="Stretch"
+                    HorizontalContentAlignment="Left"
+                    ToolTipService.ToolTip="Eraser">
+                    <StackPanel Orientation="Horizontal" Spacing="12">
+                        <FontIcon FontSize="16" Glyph="&#xE75C;" />
+                        <TextBlock Text="Eraser" Visibility="{x:Bind ToolLabels.Visibility, Mode=OneWay}" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!--  Canvas surface  -->
+        <Grid Grid.Column="1" Background="{ThemeResource CanvasBackdropBrush}">
+            <Border
+                Width="320"
+                Height="320"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Background="{ThemeResource CanvasCheckerLightBrush}"
+                BorderBrush="{ThemeResource ToolPanelBorderBrush}"
+                BorderThickness="1">
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Sprite surface" />
+            </Border>
+        </Grid>
+    </Grid>
+</Page>
