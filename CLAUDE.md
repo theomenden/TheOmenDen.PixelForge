@@ -268,6 +268,42 @@ CA1001/CA1063/CA1816/CA2213/CA2215/CA2216 are escalated to build errors, but the
 *shape* of the pattern — no analyzer verifies idempotency, which is exactly why the base class is
 the rule rather than a suggestion.
 
+**5. Expected failure is a return value. `Result<T, TError>` and `Optional<T>`, never exceptions.**
+
+Exceptions are for bugs, not for control flow and never as an exit hatch out of a method that
+couldn't finish. DotNext ships both halves:
+
+| Instead of | Use | Notes |
+|---|---|---|
+| `throw` on bad input / missing file / failed verify | `DotNext.Result<T, TError>` | `TError : struct, Enum` — a typed error code, no `Exception` object |
+| `T?` meaning "may be absent" | `DotNext.Optional<T>` | `.TryGet(out var v)`, `.Or(fallback)`, `.Convert(...)` |
+| `ThrowHelper.ThrowX(...)` mid-pipeline | a failure enum member | the caller must look at it to get a value out |
+
+`Result<T>` (single-arg) wraps an `Exception` and is the weaker form — prefer the two-arg
+`Result<T, TError>` so the failure set is closed, exhaustive, and switchable. Define one enum per
+pipeline (see `BakeFailure`), number it from 1 so `default` is never a real failure, and make the
+verified path the *only* path that produces a value — then a caller who ignores the failure gets
+nothing to write rather than something silently wrong.
+
+Argument-null checks at public boundaries stay `Guard.IsNotNull` — a null there is a caller bug,
+not an expected outcome.
+
+**6. One `RecyclableMemoryStreamManager` per process, and `ToArray` is off.**
+
+`PooledStreams.Manager` is the single instance. A manager constructed per call pools nothing — it
+just adds bookkeeping over the same allocations, and it is the most common way this library gets
+misused. Take streams from `PooledStreams.New(tag)`; the tag is what makes a leak attributable.
+
+The manager sets `ThrowExceptionOnToArray = true` on purpose: `ToArray()` copies the pooled buffer
+straight back onto the managed heap, which is the allocation the pool exists to avoid. Use
+`WriteTo(stream)`, `GetBuffer().AsSpan(0, (int)Length)`, or `GetReadOnlySequence()` — all zero-copy.
+Prefer APIs that write *into* a stream (`SKWebpEncoder.Encode(Stream, ...)`) over ones that hand
+back a fresh buffer.
+
+Pixel buffers are not streams: `SKBitmap.Pixels` allocates an `SKColor[]` per call — 828 KiB for a
+source partial, straight to the LOH. Read pixel memory through `PeekPixels()` / `GetPixelSpan()`,
+and use `Span2D<T>` for 2D block moves instead of hand-rolled stride arithmetic.
+
 ## C# conventions
 
 C# 14 throughout — this is enforced, not advisory. `TreatWarningsAsErrors` and
@@ -286,7 +322,10 @@ C# 14 throughout — this is enforced, not advisory. `TreatWarningsAsErrors` and
 - **Switch expressions** over switch statements; list and property patterns over manual indexing.
 - **Expression-bodied members** wherever the body is a single expression — methods, properties,
   accessors, operators, indexers, lambdas.
-- `var` only when the right-hand side makes the type obvious. Explicit type otherwise.
+- **`var` everywhere**, including built-in types — `var i = 0`, not `int i = 0`. This is
+  enforced: `.editorconfig` sets all three `csharp_style_var_*` rules to `true:warning`, so
+  under `EnforceCodeStyleInBuild` + `TreatWarningsAsErrors` an explicit type is a build error
+  (IDE0007), not a review note.
 - File-scoped namespaces. Braces always. Private fields `_camelCase`.
 
 **Formatting: Allman braces**, enforced by `.editorconfig` with `EnforceCodeStyleInBuild`, so a
