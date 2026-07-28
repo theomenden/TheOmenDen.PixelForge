@@ -1,0 +1,142 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{xaml,xml,csproj,props,targets,appxmanifest,manifest,slnx}]
+indent_size = 2
+
+[*.{json,yml,yaml}]
+indent_size = 2
+
+[*.cs]
+
+# ── Allman braces ────────────────────────────────────────────────────────────
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+# ── Indentation / spacing ────────────────────────────────────────────────────
+csharp_indent_case_contents = true
+csharp_indent_case_contents_when_block = false
+csharp_indent_switch_labels = true
+csharp_indent_labels = one_less_than_current
+csharp_indent_block_contents = true
+csharp_indent_braces = false
+csharp_space_after_cast = false
+csharp_space_after_keywords_in_control_flow_statements = true
+csharp_space_between_method_declaration_parameter_list_parentheses = false
+csharp_space_between_method_call_parameter_list_parentheses = false
+csharp_space_around_binary_operators = before_and_after
+csharp_preserve_single_line_blocks = true
+csharp_preserve_single_line_statements = false
+
+# ── Modern C# constructs (C# 14 / .NET 10) ───────────────────────────────────
+csharp_style_namespace_declarations = file_scoped:warning
+csharp_prefer_simple_using_statement = true:warning
+csharp_style_prefer_primary_constructors = true:suggestion
+csharp_style_prefer_top_level_statements = false:silent
+
+# Collection expressions: [] over new List<T>() / new T[] { }
+dotnet_style_collection_initializer = true:warning
+dotnet_style_prefer_collection_expression = when_types_loosely_match:warning
+dotnet_style_object_initializer = true:warning
+
+# Pattern matching over type checks and null checks
+csharp_style_pattern_matching_over_is_with_cast_check = true:warning
+csharp_style_pattern_matching_over_as_with_null_check = true:warning
+csharp_style_prefer_switch_expression = true:warning
+csharp_style_prefer_pattern_matching = true:warning
+csharp_style_prefer_not_pattern = true:warning
+csharp_style_prefer_extended_property_pattern = true:warning
+csharp_style_conditional_delegate_call = true:warning
+
+# Null handling
+csharp_style_throw_expression = true:suggestion
+dotnet_style_coalesce_expression = true:warning
+dotnet_style_null_propagation = true:warning
+dotnet_style_prefer_is_null_check_over_reference_equality_method = true:warning
+
+# Immutability
+dotnet_style_readonly_field = true:warning
+csharp_prefer_static_local_function = true:warning
+csharp_style_prefer_readonly_struct = true:warning
+csharp_style_prefer_readonly_struct_member = true:warning
+
+# Expression-bodied members — preferred wherever the body is a single expression
+csharp_style_expression_bodied_methods = when_on_single_line:warning
+csharp_style_expression_bodied_constructors = when_on_single_line:suggestion
+csharp_style_expression_bodied_operators = when_on_single_line:warning
+csharp_style_expression_bodied_indexers = true:warning
+csharp_style_expression_bodied_properties = true:warning
+csharp_style_expression_bodied_accessors = true:warning
+csharp_style_expression_bodied_lambdas = true:warning
+csharp_style_expression_bodied_local_functions = when_on_single_line:suggestion
+
+# var only when the type is apparent from the right-hand side
+csharp_style_var_for_built_in_types = false:warning
+csharp_style_var_when_type_is_apparent = true:warning
+csharp_style_var_elsewhere = false:warning
+
+# Range / index operators
+csharp_style_prefer_range_operator = true:warning
+csharp_style_prefer_index_operator = true:warning
+
+# Modifiers and braces
+csharp_prefer_braces = true:warning
+dotnet_style_require_accessibility_modifiers = for_non_interface_members:warning
+csharp_preferred_modifier_order = public,private,protected,internal,file,static,extern,new,virtual,abstract,sealed,override,readonly,unsafe,required,volatile,async:warning
+
+# ── Usings ───────────────────────────────────────────────────────────────────
+csharp_using_directive_placement = outside_namespace:warning
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+dotnet_diagnostic.IDE0005.severity = warning
+
+# ── Analyzers worth failing the build over ───────────────────────────────────
+dotnet_diagnostic.CA1852.severity = warning   # seal internal types that are never inherited
+
+# Dispose correctness. These check the *shape* of the pattern; idempotency itself is not
+# analyzer-checkable, which is why deriving from DotNext.Disposable is the rule (see CLAUDE.md).
+dotnet_diagnostic.CA1001.severity = warning   # type owns disposable fields but is not disposable
+dotnet_diagnostic.CA1063.severity = warning   # implement IDisposable correctly
+dotnet_diagnostic.CA1816.severity = warning   # Dispose should call GC.SuppressFinalize
+dotnet_diagnostic.CA2213.severity = warning   # disposable fields should be disposed
+dotnet_diagnostic.CA2215.severity = warning   # Dispose should call base.Dispose
+dotnet_diagnostic.CA2216.severity = warning   # disposable types with unmanaged state need a finalizer
+dotnet_diagnostic.CA2007.severity = none      # ConfigureAwait — not wanted in UI code
+dotnet_diagnostic.CA1848.severity = none      # LoggerMessage source-gen — opt in per case
+
+# ── Naming ───────────────────────────────────────────────────────────────────
+dotnet_naming_rule.private_fields_underscore.severity = warning
+dotnet_naming_rule.private_fields_underscore.symbols = private_fields
+dotnet_naming_rule.private_fields_underscore.style = underscore_camel_case
+dotnet_naming_symbols.private_fields.applicable_kinds = field
+dotnet_naming_symbols.private_fields.applicable_accessibilities = private
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+
+dotnet_naming_rule.constants_pascal.severity = warning
+dotnet_naming_rule.constants_pascal.symbols = constants
+dotnet_naming_rule.constants_pascal.style = pascal_case
+dotnet_naming_symbols.constants.applicable_kinds = field
+dotnet_naming_symbols.constants.required_modifiers = const
+dotnet_naming_style.pascal_case.capitalization = pascal_case
+
+# ── Generated code is exempt ─────────────────────────────────────────────────
+[*.{g,g.i,Designer}.cs]
+generated_code = true
+
+# ── Tests: Method_Under_Test naming is the xUnit convention ──────────────────
+[tests/**/*.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1861.severity = none   # constant arrays as arguments — fine in [InlineData]
