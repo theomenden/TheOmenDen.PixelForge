@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Platform-agnostic on purpose: no WinUI/Windows types in here. -->
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ILogger<T> only. Core never references Serilog — the sink composition
+         lives in the app project. -->
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ZLinq replaces System.Linq (see GlobalUsings.cs for the drop-in attribute).
+         Json/FileSystem add value-enumerable traversal for JsonNode trees and
+         directory walks — both hot in the asset pipeline. -->
+    <PackageReference Include="ZLinq" />
+    <PackageReference Include="ZLinq.DropInGenerator" PrivateAssets="all" />
+    <PackageReference Include="ZLinq.Json" />
+    <PackageReference Include="ZLinq.FileSystem" />
+    <!-- Source generator: attributes only, nothing at runtime. -->
+    <PackageReference Include="Riok.Mapperly" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Domain primitives: SpriteId/PaletteId over raw Guid, FullPath over string paths,
+         ByteSize over long, Globbing for asset discovery. -->
+    <PackageReference Include="Meziantou.Framework.StronglyTypedId" PrivateAssets="all" />
+    <PackageReference Include="Meziantou.Framework.StronglyTypedId.Interfaces" />
+    <PackageReference Include="Meziantou.Framework.ByteSize" />
+    <PackageReference Include="Meziantou.Framework.Globbing" />
+    <PackageReference Include="Meziantou.Framework.FullPath" />
+    <PackageReference Include="Meziantou.Framework.TemporaryDirectory" />
+    <PackageReference Include="CsvHelper" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Rendering / color math -->
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="ColorHelper" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Hot-path primitives: spans, 2D memory, pooled buffers, low-level threading -->
+    <PackageReference Include="CommunityToolkit.HighPerformance" />
+    <PackageReference Include="CommunityToolkit.Diagnostics" />
+    <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" />
+    <PackageReference Include="DotNext" />
+    <PackageReference Include="DotNext.Threading" />
+    <PackageReference Include="DotNext.IO" />
+    <PackageReference Include="DotNext.Unsafe" />
+  </ItemGroup>
+
+</Project>

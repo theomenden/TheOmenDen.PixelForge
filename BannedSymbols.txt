@@ -1,0 +1,23 @@
+# Banned APIs — enforced by Microsoft.CodeAnalysis.BannedApiAnalyzers (RS0030).
+# Format: T:Namespace.Type;Message
+#
+# Every entry names the replacement. If one is genuinely wrong for a case, suppress
+# RS0030 at that call site with a comment explaining why — do not delete the line.
+
+# ── Synchronization ──────────────────────────────────────────────────────────
+# DotNext.Threading covers every SemaphoreSlim use case with a lower-allocation,
+# ValueTask-based implementation and disposable holders.
+T:System.Threading.SemaphoreSlim;Use DotNext.Threading: AsyncExclusiveLock (mutex), AsyncSharedLock (throttle), AsyncCounter (signal), or AsyncLock for a using-scoped holder.
+T:System.Threading.Semaphore;Use DotNext.Threading.AsyncSharedLock, or AsyncExclusiveLock for a mutex.
+T:System.Threading.ReaderWriterLockSlim;Use DotNext.Threading.AsyncReaderWriterLock — it also supports optimistic reads and lock upgrade.
+T:System.Threading.Monitor;Use System.Threading.Lock (lock statement) for sync sections, or DotNext.Threading.AsyncExclusiveLock when the section awaits.
+T:System.Threading.Mutex;Use System.Threading.Lock in-process, or DotNext.Threading.AsyncExclusiveLock when async.
+T:System.Threading.ManualResetEventSlim;Use DotNext.Threading.AsyncManualResetEvent.
+T:System.Threading.CountdownEvent;Use DotNext.Threading.AsyncCountdownEvent.
+T:System.Threading.Barrier;Use DotNext.Threading.AsyncBarrier.
+T:System.Lazy`1;Use DotNext.Threading.AsyncLazy<T> when the factory is async; plain Lazy<T> is fine only for synchronous, non-blocking factories — suppress with a note in that case.
+
+# ── Reflection-based serialization ───────────────────────────────────────────
+# Breaks under PublishTrimmed and violates the source-generation-first rule.
+M:System.Text.Json.JsonSerializer.Serialize``1(``0,System.Text.Json.JsonSerializerOptions);Use a JsonSerializerContext overload — the reflection-based path is trim-unsafe.
+M:System.Text.Json.JsonSerializer.Deserialize``1(System.String,System.Text.Json.JsonSerializerOptions);Use a JsonSerializerContext overload — the reflection-based path is trim-unsafe.

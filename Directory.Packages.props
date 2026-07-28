@@ -1,0 +1,117 @@
+<Project>
+  <PropertyGroup>
+    <!-- Enable central package management, https://learn.microsoft.com/en-us/nuget/consume-packages/Central-Package-Management -->
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Platform / app host -->
+    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
+    <PackageVersion Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2526" />
+    <PackageVersion Include="Microsoft.Windows.SDK.BuildTools.WinApp" Version="0.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- MVVM / UI toolkit. The CommunityToolkit.WinUI.* previews are the newest
+         published builds (latest stable is 8.2.251219). -->
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageVersion Include="CommunityToolkit.WinUI.Animations" Version="8.3.260402-preview2" />
+    <PackageVersion Include="CommunityToolkit.WinUI.Behaviors" Version="8.3.260402-preview2" />
+    <PackageVersion Include="CommunityToolkit.WinUI.Controls.Primitives" Version="8.3.260402-preview2" />
+    <PackageVersion Include="CommunityToolkit.WinUI.Converters" Version="8.3.260402-preview2" />
+    <PackageVersion Include="CommunityToolkit.WinUI.Extensions" Version="8.3.260402-preview2" />
+    <PackageVersion Include="CommunityToolkit.WinUI.Helpers" Version="8.3.260402-preview2" />
+    <PackageVersion Include="CommunityToolkit.WinUI.Triggers" Version="8.3.260402-preview2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Graphics / color -->
+    <PackageVersion Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
+    <PackageVersion Include="SkiaSharp" Version="4.151.0-rc.1.1" />
+    <PackageVersion Include="ColorHelper" Version="1.8.1" />
+    <PackageVersion Include="ColorCode.Core" Version="2.0.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- High-performance primitives: spans, memory pooling, low-level threading -->
+    <PackageVersion Include="CommunityToolkit.HighPerformance" Version="8.4.2" />
+    <PackageVersion Include="CommunityToolkit.Diagnostics" Version="8.4.2" />
+    <PackageVersion Include="Microsoft.IO.RecyclableMemoryStream" Version="4.0.0-preview" />
+    <PackageVersion Include="DotNext" Version="6.5.0" />
+    <PackageVersion Include="DotNext.Threading" Version="6.5.0" />
+    <PackageVersion Include="DotNext.IO" Version="6.5.0" />
+    <PackageVersion Include="DotNext.Unsafe" Version="6.5.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- ZLinq replaces System.Linq project-wide. DropInGenerator is what makes it an
+         actual substitute: it source-generates higher-priority extension methods so
+         plain `.Where(...)` on arrays/spans/List resolves to ZLinq, no call-site edits
+         and no .AsValueEnumerable() needed. Without it ZLinq is opt-in per chain. -->
+    <PackageVersion Include="ZLinq" Version="1.5.6" />
+    <PackageVersion Include="ZLinq.DropInGenerator" Version="1.5.6" />
+    <PackageVersion Include="ZLinq.Json" Version="1.5.6" />
+    <PackageVersion Include="ZLinq.FileSystem" Version="1.5.6" />
+    <!-- Source-generated mapping. Prerelease; latest stable is 4.3.1. -->
+    <PackageVersion Include="Riok.Mapperly" Version="5.0.0-next.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Domain primitives and file plumbing.
+         StronglyTypedId is the source generator; .Interfaces is its runtime companion
+         and must be referenced normally (not PrivateAssets) or generated ids won't compile. -->
+    <PackageVersion Include="Meziantou.Framework.StronglyTypedId" Version="3.0.2" />
+    <PackageVersion Include="Meziantou.Framework.StronglyTypedId.Interfaces" Version="4.0.0" />
+    <PackageVersion Include="Meziantou.Framework.ByteSize" Version="4.0.1" />
+    <PackageVersion Include="Meziantou.Framework.Globbing" Version="4.0.0" />
+    <PackageVersion Include="Meziantou.Framework.FullPath" Version="3.0.1" />
+    <PackageVersion Include="Meziantou.Framework.TemporaryDirectory" Version="3.0.1" />
+    <PackageVersion Include="CsvHelper" Version="33.1.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Enforces BannedSymbols.txt (SemaphoreSlim, Monitor, etc.) at build time. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Host / DI / configuration. Serilog.Extensions.Hosting and
+         Serilog.Settings.Configuration only ship *.Abstractions — these provide the
+         actual host, DI container, and appsettings.json provider they bind against. -->
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Logging. Sinks.File 8.0.0-nblumhardt-* is a branch build, not a release-channel
+         prerelease (latest stable is 7.0.0); Expressions 5.1.0-dev-* is the newest build. -->
+    <PackageVersion Include="Serilog" Version="4.4.0" />
+    <PackageVersion Include="Serilog.Expressions" Version="5.1.0-dev-02309" />
+    <PackageVersion Include="Serilog.Extensions.Hosting" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Extensions.Logging" Version="10.0.0" />
+    <PackageVersion Include="Serilog.Formatting.Compact" Version="3.0.0" />
+    <PackageVersion Include="Serilog.Settings.Configuration" Version="10.0.1" />
+    <PackageVersion Include="Serilog.Sinks.Async" Version="2.1.0" />
+    <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
+    <PackageVersion Include="Serilog.Sinks.Debug" Version="3.0.0" />
+    <PackageVersion Include="Serilog.Sinks.File" Version="8.0.0-nblumhardt-02322" />
+    <PackageVersion Include="Serilog.Sinks.EventLog" Version="5.0.0-dev-00091" />
+    <PackageVersion Include="Serilog.Enrichers.Process" Version="3.0.0" />
+    <PackageVersion Include="Serilog.Enrichers.Memory" Version="1.0.4" />
+    <PackageVersion Include="SerilogAnalyzer" Version="0.15.0" />
+    <!-- NOT referenced by Core.Tests: 3.0.19 depends on xUnit *v2*
+         (xunit.abstractions 2.0.3, xunit.extensibility.core 2.9.2) and the test project
+         is xUnit v3, where ITestOutputHelper moved to the Xunit namespace. Wiring it in
+         drags v2 assemblies alongside v3. Capture logs with a plain in-memory sink until
+         an xUnit v3 build of this sink ships. -->
+    <PackageVersion Include="Serilog.Sinks.XUnit" Version="3.0.19" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Test -->
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.8.1" />
+    <PackageVersion Include="coverlet.collector" Version="10.0.1" />
+    <PackageVersion Include="xunit.v3" Version="3.2.2" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,26 @@
+<Project>
+  <!-- Modern C# baseline for every project in the repo. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <!-- Required by [LibraryImport] (source-generated interop) and by the pointer-based
+         paths in DotNext.Unsafe / CommunityToolkit.HighPerformance used for pixel buffers. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <!-- IDE0005 (unused usings) only runs on build when the doc file is generated.
+         CS1591 (missing XML doc comment) is suppressed — docs are not mandatory. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- One banned-API list for the whole repo (SemaphoreSlim, Monitor, reflection-based
+         JSON, ...). AdditionalFiles is how BannedApiAnalyzers discovers it. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" PrivateAssets="all" />
+    <AdditionalFiles Include="$(MSBuildThisFileDirectory)BannedSymbols.txt" />
+  </ItemGroup>
+</Project>

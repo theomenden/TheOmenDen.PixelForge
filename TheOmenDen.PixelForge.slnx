@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TheOmenDen.PixelForge.Core/TheOmenDen.PixelForge.Core.csproj" />
+    <Project Path="src/TheOmenDen.PixelForge/TheOmenDen.PixelForge.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TheOmenDen.PixelForge.Core.Tests/TheOmenDen.PixelForge.Core.Tests.csproj" />
+  </Folder>
+</Solution>
