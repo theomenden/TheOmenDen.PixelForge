@@ -5,6 +5,10 @@ namespace TheOmenDen.PixelForge.Core.Tests;
 /// attribute goes missing, LINQ silently falls back to System.Linq — the build stays green
 /// and the allocations come back unnoticed. These tests fail to compile in that case.
 /// </summary>
+// IDE0007 (var everywhere) is suppressed for this file alone. The explicit types below are
+// the assertions: under `var` these chains compile no matter which Where/Select bound, which
+// is precisely the silent fallback the file exists to catch.
+#pragma warning disable IDE0007
 public sealed class ZLinqDropInTests
 {
     [Fact]
@@ -32,3 +36,4 @@ public sealed class ZLinqDropInTests
         Assert.Equal([2, 4, 6], query.ToArray());
     }
 }
+#pragma warning restore IDE0007

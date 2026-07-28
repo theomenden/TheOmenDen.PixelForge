@@ -71,7 +71,7 @@ public partial class App : Application
 
     private static IHost BuildHost()
     {
-        HostApplicationBuilder builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
         {
             // Default content root is the CWD, which is not the app directory for a
             // packaged launch — appsettings.json would not be found.

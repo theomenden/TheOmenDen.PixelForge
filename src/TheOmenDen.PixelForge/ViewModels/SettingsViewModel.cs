@@ -20,7 +20,7 @@ public sealed partial class SettingsViewModel(IThemeService themeService) : Obse
         };
         set
         {
-            ElementTheme theme = value switch
+            var theme = value switch
             {
                 1 => ElementTheme.Light,
                 2 => ElementTheme.Dark,

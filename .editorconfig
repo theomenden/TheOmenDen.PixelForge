@@ -82,10 +82,10 @@ csharp_style_expression_bodied_accessors = true:warning
 csharp_style_expression_bodied_lambdas = true:warning
 csharp_style_expression_bodied_local_functions = when_on_single_line:suggestion
 
-# var only when the type is apparent from the right-hand side
-csharp_style_var_for_built_in_types = false:warning
+# var everywhere. IDE0007 fires on an explicit type, so this is enforced, not advisory.
+csharp_style_var_for_built_in_types = true:warning
 csharp_style_var_when_type_is_apparent = true:warning
-csharp_style_var_elsewhere = false:warning
+csharp_style_var_elsewhere = true:warning
 
 # Range / index operators
 csharp_style_prefer_range_operator = true:warning

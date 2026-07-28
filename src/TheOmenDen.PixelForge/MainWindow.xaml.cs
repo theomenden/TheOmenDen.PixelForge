@@ -47,8 +47,8 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void ResizeToDefault()
     {
-        IntPtr hwnd = Win32Interop.GetWindowFromWindowId(AppWindow.Id);
-        double scale = GetDpiForWindow(hwnd) / 96.0;
+        var hwnd = Win32Interop.GetWindowFromWindowId(AppWindow.Id);
+        var scale = GetDpiForWindow(hwnd) / 96.0;
 
         AppWindow.Resize(new SizeInt32((int)(DefaultWidthDips * scale), (int)(DefaultHeightDips * scale)));
     }
@@ -62,7 +62,7 @@ public sealed partial class MainWindow : Window
             return;
         }
 
-        Type page = (args.SelectedItem as NavigationViewItem)?.Tag switch
+        var page = (args.SelectedItem as NavigationViewItem)?.Tag switch
         {
             "Assets" => typeof(AssetsPage),
             "Pipeline" => typeof(PipelinePage),

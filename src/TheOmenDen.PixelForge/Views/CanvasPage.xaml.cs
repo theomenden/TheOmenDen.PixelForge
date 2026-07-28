@@ -21,10 +21,10 @@ public sealed partial class CanvasPage : Page
     private void OnRootSizeChanged(object sender, SizeChangedEventArgs e)
     {
         // RasterizationScale is 0 before the page is in a live visual tree.
-        double scale = XamlRoot?.RasterizationScale ?? 1.0;
-        double effectiveDips = scale > 0 ? e.NewSize.Width / scale : e.NewSize.Width;
+        var scale = XamlRoot?.RasterizationScale ?? 1.0;
+        var effectiveDips = scale > 0 ? e.NewSize.Width / scale : e.NewSize.Width;
 
-        string state = effectiveDips < CompactThresholdDips ? "ToolPanelCompact" : "ToolPanelWide";
+        var state = effectiveDips < CompactThresholdDips ? "ToolPanelCompact" : "ToolPanelWide";
         VisualStateManager.GoToState(this, state, useTransitions: false);
     }
 }
