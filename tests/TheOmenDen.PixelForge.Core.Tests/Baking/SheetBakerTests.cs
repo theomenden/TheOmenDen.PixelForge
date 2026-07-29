@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using SkiaSharp;
 using TheOmenDen.PixelForge.Core.Baking;
 using TheOmenDen.PixelForge.Core.Palettes;
@@ -46,7 +45,7 @@ public sealed class SheetBakerTests
         return result.Value;
     }
 
-    private static SKBitmap RecolorOrFail(SKBitmap source, FrozenDictionary<uint, SKColor> substitution)
+    private static SKBitmap RecolorOrFail(SKBitmap source, RampSubstitution substitution)
     {
         var result = SheetBaker.Recolor(source, substitution);
 
@@ -201,7 +200,7 @@ public sealed class SheetBakerTests
     public void Recolor_ReplacesRampColours_AndLeavesEverythingElseAlone()
     {
         var target = SkinRamps.All[3];
-        var substitution = target.LegacySubstitutionFrom(SkinRamps.Source);
+        var substitution = target.SubstitutionFrom(SkinRamps.Source);
 
         using var source = NewBitmap(4, 1);
         var pixels = source.Pixels;
@@ -240,7 +239,7 @@ public sealed class SheetBakerTests
 
         foreach (var ramp in SkinRamps.All)
         {
-            using var recolored = RecolorOrFail(source, ramp.LegacySubstitutionFrom(SkinRamps.Source));
+            using var recolored = RecolorOrFail(source, ramp.SubstitutionFrom(SkinRamps.Source));
 
             for (var step = 0; step < SkinRamps.StepCount; step++)
             {

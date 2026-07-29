@@ -104,7 +104,7 @@ public static class RecipeBaker
 
             if (recipe.Recolor.TryGet(out var ramp))
             {
-                var recolored = SheetBaker.Recolor(subject, ramp.LegacySubstitutionFrom(SkinRamps.Source));
+                var recolored = SheetBaker.Recolor(subject, ramp.SubstitutionFrom(SkinRamps.Source));
 
                 if (!recolored.TryGet(out toned))
                 {
