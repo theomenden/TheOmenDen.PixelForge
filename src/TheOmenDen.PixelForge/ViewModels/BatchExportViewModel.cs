@@ -189,6 +189,18 @@ public sealed partial class BatchExportViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// The one recipe the page's composite still stands for, or none while the selection plans
+    /// nothing.
+    /// </summary>
+    /// <remarks>
+    /// A property rather than an event payload: the view rebuilds the still off
+    /// <see cref="PlannedCount"/>'s change notification, which every axis already raises. It stops
+    /// at the recipe because a <c>Microsoft.UI</c> image type here would cost the view model its
+    /// testability — see <c>CompositePreview</c>, which does the rendering.
+    /// </remarks>
+    public Optional<SheetRecipe> PreviewRecipe => ExportPlan.Still(Selections(), SelectedTones());
+
     [RelayCommand]
     private async Task BrowseOutputAsync()
     {
@@ -234,11 +246,11 @@ public sealed partial class BatchExportViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanExport), IncludeCancelCommand = true)]
     private async Task ExportAsync(CancellationToken cancellationToken)
     {
-        var planned = PlanRecipes();
+        var planned = ExportPlan.Recipes(Selections(), SelectedTones(), Mode);
 
         if (!planned.TryGet(out var recipes))
         {
-            Notify(Explain(planned.Error), StatusLevel.Warning);
+            Notify(ExportPlan.Explain(planned.Error), StatusLevel.Warning);
 
             return;
         }
@@ -294,56 +306,6 @@ public sealed partial class BatchExportViewModel : ObservableObject
 
     private void Notify(string message, StatusLevel level) =>
         Notified?.Invoke(this, new StatusNoticeEventArgs(message, level));
-
-    /// <summary>
-    /// The recipes the current selection, tones and mode imply.
-    /// </summary>
-    /// <returns>
-    /// The recipes, or the <see cref="PlanFailure"/> that stopped them — a half-committed body is
-    /// a notice, never a crash.
-    /// </returns>
-    /// <remarks>
-    /// <see cref="ExportMode.Both"/> plans the same selection twice rather than baking once and
-    /// re-cutting, because the two geometries are different remaps of the assembly rather than
-    /// crops of one another.
-    /// </remarks>
-    private Result<ImmutableArray<SheetRecipe>, PlanFailure> PlanRecipes()
-    {
-        var selections = Selections();
-        var tones = SelectedTones();
-
-        if (Mode is not ExportMode.Both)
-        {
-            return BatchPlan.Expand(selections, tones, Mode is ExportMode.Full
-                ? SheetGeometry.Full
-                : SheetGeometry.Curated);
-        }
-
-        var curated = BatchPlan.Expand(selections, tones, SheetGeometry.Curated);
-
-        if (!curated.TryGet(out var first))
-        {
-            return new(curated.Error);
-        }
-
-        var full = BatchPlan.Expand(selections, tones, SheetGeometry.Full);
-
-        if (!full.TryGet(out var second))
-        {
-            return new(full.Error);
-        }
-
-        ImmutableArray<SheetRecipe> both = [.. first, .. second];
-
-        return new(both);
-    }
-
-    private static string Explain(PlanFailure failure) => failure switch
-    {
-        PlanFailure.RequiredSlotEmpty =>
-            "Bottom, top and head go together. Fill all three, or leave all three empty for an overlay-only sheet.",
-        _ => "Nothing selected.",
-    };
 
     /// <summary>What every slot contributes, or nothing at all until the packs resolve.</summary>
     private ImmutableArray<SlotSelection> Selections() =>

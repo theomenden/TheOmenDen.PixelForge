@@ -31,9 +31,17 @@ public sealed partial class PipelinePage : Page
     /// </summary>
     private bool _modeReady;
 
+    /// <summary>
+    /// The still above the picker. Owned by the page rather than the view model, because it deals
+    /// in image types the view model deliberately cannot name.
+    /// </summary>
+    private readonly CompositePreview _preview;
+
     public PipelinePage()
     {
         InitializeComponent();
+
+        _preview = new(ViewModel, CompositePreviewImage);
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -202,6 +210,8 @@ public sealed partial class PipelinePage : Page
         _modeReady = false;
         ExportModeSegmented.SelectedIndex = ViewModel.SelectedModeIndex;
         _modeReady = true;
+
+        _preview.Start();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
@@ -209,6 +219,8 @@ public sealed partial class PipelinePage : Page
         _modeReady = false;
 
         ViewModel.Notified -= OnNotified;
+
+        _preview.Stop();
     }
 
     /// <summary>

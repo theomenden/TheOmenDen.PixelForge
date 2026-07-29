@@ -110,11 +110,32 @@
         </Grid>
 
         <!--  Selection — one expander per slot the catalogue can fill, plus the tone axis.  -->
-        <Grid Grid.Row="3" ColumnSpacing="16">
+        <Grid
+            Grid.Row="3"
+            ColumnSpacing="16"
+            RowSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="260" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!--
+                The still the current selection composes to. Source and size are both set from
+                CompositePreview: the view model deals in recipes, never in image types.
+                Stretch="None" because PalettePreview already upscales nearest-neighbour, and
+                WinUI's Image has no interpolation-mode switch — letting it scale would blur the
+                pixel art it exists to show.
+            -->
+            <Image
+                x:Name="CompositePreviewImage"
+                HorizontalAlignment="Left"
+                AutomationProperties.AutomationId="CompositePreviewImage"
+                AutomationProperties.Name="Composite preview"
+                Stretch="None" />
 
             <!--
                 ItemsRepeater is a layout primitive: it has no scrolling of its own, so without
@@ -123,6 +144,7 @@
                 bind to, and a repeated block is a block that drifts.
             -->
             <ScrollViewer
+                Grid.Row="1"
                 Padding="0,0,16,0"
                 HorizontalScrollBarVisibility="Disabled"
                 VerticalScrollBarVisibility="Auto">
@@ -183,6 +205,7 @@
             </ScrollViewer>
 
             <ScrollViewer
+                Grid.RowSpan="2"
                 Grid.Column="1"
                 HorizontalScrollBarVisibility="Disabled"
                 VerticalScrollBarVisibility="Auto">
