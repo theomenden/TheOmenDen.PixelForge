@@ -1,0 +1,240 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.corvusconnection.app/pixelforge-manifest-v1.json",
+  "title": "PixelForge run manifest",
+  "description": "Describes one batch bake: the sheets written, the animation layout needed to read them, and the skin ramps they were recoloured into. This file is the shipped contract — consumers read it, PixelForge only writes it.",
+  "type": "object",
+  "required": ["$schema", "schemaVersion", "runId", "palette", "layouts", "sheets"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Relative path to the schema copied beside this manifest, so an editor validates it with no network access."
+    },
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semantic version of this manifest format. The major component changes only on a breaking change to the shape."
+    },
+    "runId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUIDv7 identifying the bake run. Leads with a millisecond timestamp, so run ids sort chronologically."
+    },
+    "palette": { "$ref": "#/$defs/palette" },
+    "layouts": { "$ref": "#/$defs/layouts" },
+    "sheets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sheet" },
+      "description": "Every sheet the run wrote, in bake order."
+    }
+  },
+  "$defs": {
+    "hexColor": {
+      "type": "string",
+      "pattern": "^#[0-9A-F]{6}$",
+      "description": "Opaque RGB colour, uppercase hex. Alpha is never carried — the recolour only ever substitutes opaque pixels."
+    },
+    "facing": {
+      "enum": ["south", "west", "east", "north"],
+      "description": "Direction the avatar faces. Curated sheets drop north entirely."
+    },
+    "ramp": {
+      "type": "object",
+      "required": ["name", "isHuman", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identity of the ramp. Names are unique case-insensitively; a custom ramp may not shadow a built-in."
+        },
+        "isHuman": {
+          "type": "boolean",
+          "description": "Whether this reads as human skin. Fantasy tones are reachable only by explicit choice, never by a hashed default."
+        },
+        "steps": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": { "$ref": "#/$defs/hexColor" },
+          "description": "The five ramp steps, darkest shadow first. Index 3 is the base tone — what a viewer thinks of as 'the' colour of this ramp."
+        }
+      }
+    },
+    "palette": {
+      "type": "object",
+      "required": ["sourceRamp", "ramps"],
+      "additionalProperties": false,
+      "description": "The colours behind the run. A recolour is a straight index-for-index substitution of five colours — no blending, no dithering, no colour-space maths.",
+      "properties": {
+        "sourceRamp": {
+          "$ref": "#/$defs/ramp",
+          "description": "The ramp every source partial is authored in, and therefore what each sheet's tone was substituted FROM."
+        },
+        "ramps": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ramp" },
+          "description": "The distinct tones this run actually substituted INTO, including any custom ramps. A run that applied no tone carries an empty array."
+        }
+      }
+    },
+    "curatedClip": {
+      "type": "object",
+      "required": ["name", "frameCount", "sourceColumn", "rows"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "frameCount": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Frames in this clip. They occupy output columns 0 to frameCount-1 of the clip's row; trailing cells up to the sheet's column count are transparent."
+        },
+        "sourceColumn": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Provenance only: the column of frame 0 in the 23-column source sheet. NOT an output column — curated frames are always left-aligned from column 0."
+        },
+        "rows": {
+          "type": "object",
+          "required": ["south", "west", "east"],
+          "additionalProperties": false,
+          "description": "Output row this clip occupies for each facing, stated per facing so a consumer never has to know the row formula.",
+          "properties": {
+            "south": { "type": "integer", "minimum": 0 },
+            "west": { "type": "integer", "minimum": 0 },
+            "east": { "type": "integer", "minimum": 0 }
+          }
+        }
+      }
+    },
+    "fullClip": {
+      "type": "object",
+      "required": ["name", "columns", "isRenderedByDefault", "reverseDrawOrder"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "integer", "minimum": 0 },
+          "description": "Source columns to draw, in playback order. This repeats and descends — walk is 1, 2, 1, 0 — so it MUST NOT be re-sorted or de-duplicated."
+        },
+        "isRenderedByDefault": {
+          "type": "boolean",
+          "description": "Whether the generator treats this clip as a playable animation rather than a single pose."
+        },
+        "reverseDrawOrder": {
+          "type": "boolean",
+          "description": "Whether this clip's layers composite back to front. True for climb alone."
+        }
+      }
+    },
+    "curatedLayout": {
+      "type": "object",
+      "required": ["width", "height", "cellSize", "columns", "rows", "frameDurationMs", "facings", "clips"],
+      "additionalProperties": false,
+      "description": "The curated sheet: 8 clips on 3 facings, north dropped, frames left-aligned per row.",
+      "properties": {
+        "width": { "type": "integer", "exclusiveMinimum": 0 },
+        "height": { "type": "integer", "exclusiveMinimum": 0 },
+        "cellSize": { "type": "integer", "exclusiveMinimum": 0 },
+        "columns": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Columns in the sheet, set by the widest clip."
+        },
+        "rows": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Rows in the sheet: one per clip per facing."
+        },
+        "frameDurationMs": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "How long each frame is held. The deliberate cadence of this art style — play at this rate rather than guessing."
+        },
+        "facings": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/facing" },
+          "description": "Facings this geometry carries, in row order within a clip."
+        },
+        "clips": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/curatedClip" } }
+      }
+    },
+    "fullLayout": {
+      "type": "object",
+      "required": ["width", "height", "cellSize", "columns", "rows", "frameDurationMs", "facingRows", "clips"],
+      "additionalProperties": false,
+      "description": "The raw source assembly, written without a remap: all source columns on all four facing rows.",
+      "properties": {
+        "width": { "type": "integer", "exclusiveMinimum": 0 },
+        "height": { "type": "integer", "exclusiveMinimum": 0 },
+        "cellSize": { "type": "integer", "exclusiveMinimum": 0 },
+        "columns": { "type": "integer", "exclusiveMinimum": 0 },
+        "rows": { "type": "integer", "exclusiveMinimum": 0 },
+        "frameDurationMs": { "type": "integer", "exclusiveMinimum": 0 },
+        "facingRows": {
+          "type": "object",
+          "required": ["south", "west", "east", "north"],
+          "additionalProperties": false,
+          "description": "Sheet row each facing occupies. Fixed for every clip in this geometry, which is why it sits on the layout rather than on each clip.",
+          "properties": {
+            "south": { "type": "integer", "minimum": 0 },
+            "west": { "type": "integer", "minimum": 0 },
+            "east": { "type": "integer", "minimum": 0 },
+            "north": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "clips": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fullClip" } }
+      }
+    },
+    "layouts": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "description": "A layout appears only when the run actually produced that geometry, so a manifest never describes files that are not in the folder.",
+      "properties": {
+        "curated": { "$ref": "#/$defs/curatedLayout" },
+        "full": { "$ref": "#/$defs/fullLayout" }
+      }
+    },
+    "slots": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "The partial that filled each layer slot, back to front, by stem. A slot the sheet does not use is absent rather than empty.",
+      "properties": {
+        "shadow": { "type": "string", "minLength": 1 },
+        "backExtra": { "type": "string", "minLength": 1 },
+        "backHair": { "type": "string", "minLength": 1 },
+        "bottom": { "type": "string", "minLength": 1 },
+        "top": { "type": "string", "minLength": 1 },
+        "head": { "type": "string", "minLength": 1 },
+        "hair": { "type": "string", "minLength": 1 },
+        "frontExtra": { "type": "string", "minLength": 1 },
+        "hat": { "type": "string", "minLength": 1 },
+        "weapon": { "type": "string", "minLength": 1 }
+      }
+    },
+    "sheet": {
+      "type": "object",
+      "required": ["name", "file", "geometry", "slots"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "description": "The sheet's stem, without extension." },
+        "file": { "type": "string", "minLength": 1, "description": "The file written, including extension. Lossless WebP, verified by round trip." },
+        "geometry": {
+          "enum": ["curated", "full"],
+          "description": "Which layout under layouts describes this sheet."
+        },
+        "tone": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the ramp under palette.ramps this sheet's skin was substituted into. Absent when the sheet carries no skin and keeps its authored colours."
+        },
+        "slots": { "$ref": "#/$defs/slots" }
+      }
+    }
+  }
+}

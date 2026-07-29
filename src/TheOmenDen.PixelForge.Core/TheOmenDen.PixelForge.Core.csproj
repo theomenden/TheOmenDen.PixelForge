@@ -3,6 +3,19 @@
   <PropertyGroup>
     <!-- Platform-agnostic on purpose: no WinUI/Windows types in here. -->
     <TargetFramework>net10.0</TargetFramework>
+    <!-- The Corvus.Text.Json generator emits <param> tags that do not match the signatures it
+         generates alongside them — ~1400 of them for one schema. GenerateDocumentationFile plus
+         TreatWarningsAsErrors turns each into a build error.
+
+         This has to be project-level. .editorconfig's `generated_code = true` exempts analyzer
+         diagnostics, but the compiler's own CS-prefixed warnings on source-generated trees are
+         not configurable per-file, so there is no way to scope this to the generated output.
+         Confined to this project, which is the only one hosting the generator; CS1591 is already
+         suppressed repo-wide for the same "docs are not mandatory" reason.
+
+         CS1574 joins them: the generator emits a cref to TryGetNumericValues, an overload it
+         does not itself declare. -->
+    <NoWarn>$(NoWarn);CS1572;CS1573;CS1574</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -41,6 +54,23 @@
     <!-- Rendering / color math -->
     <PackageReference Include="SkiaSharp" />
     <PackageReference Include="ColorHelper" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The run manifest's JSON Schema is the shipped contract; the source generator turns it
+         into the readonly structs RunManifest writes through, so the writer cannot emit a shape
+         the schema forbids. -->
+    <PackageReference Include="Corvus.Text.Json" />
+    <PackageReference Include="Corvus.Text.Json.SourceGenerator" PrivateAssets="all" />
+    <PackageReference Include="Corvus.Text.Json.Compatibility" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- AdditionalFiles is how the generator reads the schema at compile time. EmbeddedResource
+         is how RunManifest copies it beside the manifest at run time — Corvus consumes baked
+         artifacts with no build coupling, so the export folder has to carry its own contract. -->
+    <AdditionalFiles Include="Schemas\pixelforge-manifest-v1.json" />
+    <EmbeddedResource Include="Schemas\pixelforge-manifest-v1.json" />
   </ItemGroup>
 
   <ItemGroup>

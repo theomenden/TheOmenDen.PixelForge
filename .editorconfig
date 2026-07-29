@@ -148,8 +148,15 @@ dotnet_naming_symbols.private_fields.applicable_accessibilities = private
 # ── Generated code is exempt ─────────────────────────────────────────────────
 [*.{g,g.i,Designer}.cs]
 generated_code = true
+# This covers analyzer diagnostics only. The compiler's own CS-prefixed warnings on
+# source-generated trees are not configurable here — see the CS1572/CS1573 NoWarn in
+# TheOmenDen.PixelForge.Core.csproj for why that one project needs a project-level suppression.
 
 # ── Tests: Method_Under_Test naming is the xUnit convention ──────────────────
 [tests/**/*.cs]
 dotnet_diagnostic.CA1707.severity = none
 dotnet_diagnostic.CA1861.severity = none   # constant arrays as arguments — fine in [InlineData]
+# Corvus's analyzer, which reaches here transitively. It wants GetProperty("clips"u8) over
+# GetProperty("clips") — right in the writer, where RunManifest uses the generated *Utf8 spans
+# throughout, and noise in an assertion that reads a single property once. Same trade as CA1861.
+dotnet_diagnostic.CTJ001.severity = none

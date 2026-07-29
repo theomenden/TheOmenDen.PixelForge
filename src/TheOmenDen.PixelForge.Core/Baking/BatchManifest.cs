@@ -71,19 +71,7 @@ public static class BatchManifest
     /// </remarks>
     public static BatchManifestRow RowFor(SheetRecipe recipe)
     {
-        Guard.IsNotNull(recipe);
-
-        var stems = new string[AssetSlots.DrawOrder.Length];
-
-        Array.Fill(stems, string.Empty);
-
-        foreach (var layer in recipe.Layers)
-        {
-            if (Enum.TryParse<AssetSlot>(layer.Path.Parent.Name, ignoreCase: true, out var slot))
-            {
-                stems[(int)slot] = layer.Path.NameWithoutExtension;
-            }
-        }
+        var stems = StemsBySlot(recipe);
 
         return new()
         {
@@ -102,6 +90,35 @@ public static class BatchManifest
             Hat = stems[(int)AssetSlot.Hat],
             Weapon = stems[(int)AssetSlot.Weapon],
         };
+    }
+
+    /// <summary>
+    /// The partial filling each slot, indexed by <see cref="AssetSlot"/>, blank where the recipe
+    /// leaves a slot empty.
+    /// </summary>
+    /// <param name="recipe">The recipe to read layers from.</param>
+    /// <returns>An array of <see cref="AssetSlots.DrawOrder"/>'s length, never <see langword="null"/>.</returns>
+    /// <remarks>
+    /// Shared with <see cref="RunManifest"/> so <c>sheets.csv</c> and <c>manifest.json</c> cannot
+    /// disagree about which partial filled which slot — one mapping, two readers.
+    /// </remarks>
+    internal static string[] StemsBySlot(SheetRecipe recipe)
+    {
+        Guard.IsNotNull(recipe);
+
+        var stems = new string[AssetSlots.DrawOrder.Length];
+
+        Array.Fill(stems, string.Empty);
+
+        foreach (var layer in recipe.Layers)
+        {
+            if (Enum.TryParse<AssetSlot>(layer.Path.Parent.Name, ignoreCase: true, out var slot))
+            {
+                stems[(int)slot] = layer.Path.NameWithoutExtension;
+            }
+        }
+
+        return stems;
     }
 
     /// <summary>Writes <c>sheets.csv</c> into an export directory.</summary>

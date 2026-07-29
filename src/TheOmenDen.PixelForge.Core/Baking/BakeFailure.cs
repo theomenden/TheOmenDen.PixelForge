@@ -50,4 +50,15 @@ public enum BakeFailure
 
     /// <summary>The sheet encoded, but the file could not be written.</summary>
     OutputWriteFailed,
+
+    /// <summary>
+    /// The composed run manifest did not satisfy <c>pixelforge-manifest-v1.json</c>.
+    /// <para>
+    /// Unlike its neighbours this one <em>is</em> a bug rather than bad input — nothing a user
+    /// supplies should be able to produce an invalid document. It stays a value because the
+    /// alternative is throwing out of a bake that otherwise succeeded, and because a manifest
+    /// that fails its own schema must never reach disk where a consumer would read it.
+    /// </para>
+    /// </summary>
+    ManifestSchemaViolation,
 }

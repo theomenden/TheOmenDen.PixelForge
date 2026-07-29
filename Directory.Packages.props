@@ -79,6 +79,23 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- JSON Schema is the shipped contract: the schema file is authored by hand, the
+         SourceGenerator turns it into readonly structs at build time, and the runtime library
+         carries its own reader/writer stack (Corvus.Text.Json.Utf8JsonWriter) rather than
+         wrapping System.Text.Json. .Compatibility is the bridge back to STJ — WriteTo,
+         AsSTJsonElement, AsJsonNode — for the day a consumer needs one.
+
+         Deliberately NOT referenced:
+           .CodeGeneration — its own README says use the source generator instead; that package
+                             is for building custom codegen tooling and is already embedded.
+           .Validator      — compiles unknown schemas at runtime via Roslyn. Ours is known at
+                             build time and the generated EvaluateSchema() already validates. -->
+    <PackageVersion Include="Corvus.Text.Json" Version="5.2.10" />
+    <PackageVersion Include="Corvus.Text.Json.SourceGenerator" Version="5.2.10" />
+    <PackageVersion Include="Corvus.Text.Json.Compatibility" Version="5.2.10" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Enforces BannedSymbols.txt (SemaphoreSlim, Monitor, etc.) at build time. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
   </ItemGroup>
