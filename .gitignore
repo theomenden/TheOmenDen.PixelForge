@@ -58,3 +58,28 @@ tests/ui-results/
 
 # Agent worktrees
 .claude/worktrees/
+
+# Time Elements source art and baked sheets — purchased assets, never committed.
+#
+# The packs normally live outside the repo entirely (SourcePacks takes absolute paths, so
+# nothing here depends on a location), which is why none of this is tracked today. These
+# rules are the guard for when that stops being true by accident: a pack copied in for
+# convenience, or an export directory pointed at the working tree.
+#
+# Scoped to the pack's own assets/<slot>/ shape rather than a bare "assets/" — core.ignorecase
+# is true on Windows, so that would also swallow src/TheOmenDen.PixelForge/Assets/, which holds
+# the MSIX tile logos and must stay tracked. Slot names are AssetSlot's members, lowercased;
+# they are the pack's folder names.
+**/assets/shadow/
+**/assets/backextra/
+**/assets/backhair/
+**/assets/bottom/
+**/assets/top/
+**/assets/head/
+**/assets/hair/
+**/assets/frontextra/
+**/assets/hat/
+**/assets/weapon/
+
+# Baked sheets. Lossless WebP is only ever written by this app, never checked in.
+*.webp
