@@ -33,8 +33,14 @@ public sealed record SkinRamp
     /// <summary>
     /// Substitution table taking <paramref name="source"/>'s colours to this ramp's, keyed on
     /// packed RGB. Identity when this ramp is the source.
+    /// <para>
+    /// Superseded by <see cref="SubstitutionFrom(SkinRamp)"/>, which returns the packed-pixel
+    /// <see cref="RampSubstitution"/> the vectorised recolour consumes. This member exists only
+    /// while the dictionary-driven <see cref="Baking.SheetBaker.Recolor"/> is still in place and
+    /// is deleted with it — do not add callers.
+    /// </para>
     /// </summary>
-    public FrozenDictionary<uint, SKColor> SubstitutionFrom(SkinRamp source)
+    public FrozenDictionary<uint, SKColor> LegacySubstitutionFrom(SkinRamp source)
     {
         Guard.IsNotNull(source);
         Guard.IsEqualTo(source.Steps.Length, SkinRamps.StepCount);
@@ -51,8 +57,52 @@ public sealed record SkinRamp
     }
 
     /// <summary>
+    /// Substitution table taking <paramref name="source"/>'s colours to this ramp's, as packed
+    /// pixels ready for the vectorised recolour. Identity when this ramp <em>is</em>
+    /// <paramref name="source"/>.
+    /// </summary>
+    public RampSubstitution SubstitutionFrom(SkinRamp source)
+    {
+        Guard.IsNotNull(source);
+        Guard.IsEqualTo(source.Steps.Length, SkinRamps.StepCount);
+        Guard.IsEqualTo(Steps.Length, SkinRamps.StepCount);
+
+        var from = ImmutableArray.CreateBuilder<uint>(SkinRamps.StepCount);
+        var to = ImmutableArray.CreateBuilder<uint>(SkinRamps.StepCount);
+
+        for (var step = 0; step < SkinRamps.StepCount; step++)
+        {
+            from.Add(PackedRgba(source.Steps[step]));
+            to.Add(PackedRgba(Steps[step]));
+        }
+
+        return new()
+        {
+            From = from.ToImmutable(),
+            To = to.ToImmutable(),
+        };
+    }
+
+    /// <summary>
     /// Packs a colour's RGB into a lookup key. Alpha is deliberately ignored — this is a
     /// dictionary key, not a colour conversion.
     /// </summary>
     public static uint Pack(SKColor color) => ((uint)color.Red << 16) | ((uint)color.Green << 8) | color.Blue;
+
+    /// <summary>
+    /// Packs a colour into a whole RGBA8888 pixel with alpha forced opaque.
+    /// <para>
+    /// The byte order is the trap. RGBA8888 lays out R,G,B,A in ascending addresses, so reading
+    /// that memory as a little-endian <see cref="uint"/> yields <c>0xAABBGGRR</c> — red in the
+    /// <em>low</em> byte. <see cref="Pack"/>'s dictionary key is the opposite, <c>0xRRGGBB</c>.
+    /// Confusing the two swaps red and blue in every baked sheet, and the round-trip verification
+    /// would not catch it because it compares an encode against its own decode.
+    /// </para>
+    /// <para>
+    /// Alpha is forced to <c>0xFF</c> rather than taken from <paramref name="color"/> because these
+    /// values are compared against opaque pixels only; see <see cref="RampSubstitution"/>.
+    /// </para>
+    /// </summary>
+    public static uint PackedRgba(SKColor color) =>
+        0xFF000000u | ((uint)color.Blue << 16) | ((uint)color.Green << 8) | color.Red;
 }

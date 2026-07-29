@@ -52,9 +52,9 @@ public sealed class SkinRampTests
         => Assert.Equal(new SKColor(r, g, b), SkinRamps.All[index].BaseTone);
 
     [Fact]
-    public void SubstitutionFrom_IsIdentity_WhenTargetIsTheSourceRamp()
+    public void LegacySubstitutionFrom_IsIdentity_WhenTargetIsTheSourceRamp()
     {
-        var substitution = SkinRamps.Source.SubstitutionFrom(SkinRamps.Source);
+        var substitution = SkinRamps.Source.LegacySubstitutionFrom(SkinRamps.Source);
 
         foreach (var step in SkinRamps.Source.Steps)
         {
@@ -63,10 +63,10 @@ public sealed class SkinRampTests
     }
 
     [Fact]
-    public void SubstitutionFrom_MapsEachStepToTheSameIndex()
+    public void LegacySubstitutionFrom_MapsEachStepToTheSameIndex()
     {
         var target = SkinRamps.All[3];
-        var substitution = target.SubstitutionFrom(SkinRamps.Source);
+        var substitution = target.LegacySubstitutionFrom(SkinRamps.Source);
 
         Assert.Equal(SkinRamps.StepCount, substitution.Count);
 

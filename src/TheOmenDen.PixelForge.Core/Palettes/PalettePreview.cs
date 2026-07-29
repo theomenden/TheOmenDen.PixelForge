@@ -104,7 +104,7 @@ public sealed class PalettePreview : Disposable
         {
             using (crop)
             {
-                var recolored = SheetBaker.Recolor(crop, ramp.SubstitutionFrom(SkinRamps.Source));
+                var recolored = SheetBaker.Recolor(crop, ramp.LegacySubstitutionFrom(SkinRamps.Source));
 
                 if (!recolored.TryGet(out toned))
                 {
