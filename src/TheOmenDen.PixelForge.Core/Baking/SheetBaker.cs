@@ -31,8 +31,14 @@ public static class SheetBaker
     /// <summary>
     /// Nearest with no mipmapping. Layers land 1:1 so no resampling should occur at all, but
     /// stating it means a future scaled draw cannot quietly blur pixel art.
+    /// <para>
+    /// Internal rather than private: <see cref="RecipeBaker"/> and
+    /// <see cref="Palettes.PalettePreview"/> draw pixel art too, and this must stay identical on
+    /// every path — a single source stops one of them drifting to <see cref="SKFilterMode.Linear"/>
+    /// unnoticed.
+    /// </para>
     /// </summary>
-    private static SKSamplingOptions PixelExact => new(SKFilterMode.Nearest, SKMipmapMode.None);
+    internal static SKSamplingOptions PixelExact => new(SKFilterMode.Nearest, SKMipmapMode.None);
 
     /// <summary>
     /// Flattens layer partials in draw order — the caller passes them back-to-front, matching

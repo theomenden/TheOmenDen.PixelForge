@@ -188,11 +188,11 @@ public static class RecipeBaker
             using (var canvas = new SKCanvas(composited))
             {
                 canvas.Clear(SKColors.Transparent);
-                canvas.DrawBitmap(subject, 0, 0, PixelExact);
+                canvas.DrawBitmap(subject, 0, 0, SheetBaker.PixelExact);
 
                 foreach (var overlay in loaded)
                 {
-                    canvas.DrawBitmap(overlay, 0, 0, PixelExact);
+                    canvas.DrawBitmap(overlay, 0, 0, SheetBaker.PixelExact);
                 }
             }
 
@@ -206,7 +206,4 @@ public static class RecipeBaker
             }
         }
     }
-
-    /// <summary>Nearest with no mipmapping — a scaled draw must never blur pixel art.</summary>
-    private static SKSamplingOptions PixelExact => new(SKFilterMode.Nearest, SKMipmapMode.None);
 }

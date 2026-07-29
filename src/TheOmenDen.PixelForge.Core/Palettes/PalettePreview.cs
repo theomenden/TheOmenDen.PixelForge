@@ -35,13 +35,6 @@ public sealed class PalettePreview : Disposable
 
     private PalettePreview(SKBitmap curated) => _curated = curated;
 
-    /// <summary><see cref="Disposable.IsDisposed"/> is protected on the base class — republished
-    /// here because callers (and tests) need to observe disposal from outside.</summary>
-    public new bool IsDisposed => base.IsDisposed;
-
-    /// <summary>Nearest with no mipmapping — a scaled draw must never blur pixel art.</summary>
-    private static SKSamplingOptions PixelExact => new(SKFilterMode.Nearest, SKMipmapMode.None);
-
     /// <summary>
     /// Index of the idle clip. Looked up by name rather than hard-coded, so reordering
     /// <see cref="SheetLayout.Clips"/> cannot silently point the preview at a different animation.
@@ -58,7 +51,7 @@ public sealed class PalettePreview : Disposable
             }
         }
 
-        return 0;
+        return ThrowHelper.ThrowInvalidOperationException<int>($"SheetLayout.Clips has no clip named '{name}'.");
     }
 
     /// <summary>
@@ -165,7 +158,7 @@ public sealed class PalettePreview : Disposable
                     SheetLayout.CellSize,
                     SheetLayout.CellSize);
 
-                canvas.DrawBitmap(_curated, source, destination, PixelExact);
+                canvas.DrawBitmap(_curated, source, destination, SheetBaker.PixelExact);
             }
         }
 
@@ -184,7 +177,7 @@ public sealed class PalettePreview : Disposable
                 source,
                 SKRect.Create(0, 0, source.Width, source.Height),
                 SKRect.Create(0, 0, scaled.Width, scaled.Height),
-                PixelExact);
+                SheetBaker.PixelExact);
         }
 
         return SheetBaker.ToCanonical(scaled);

@@ -12,14 +12,58 @@ public sealed class PalettePreviewTests : IDisposable
 
     public void Dispose() => _directory.Dispose();
 
-    /// <summary>A source-geometry partial filled with one colour, written as PNG.</summary>
+    /// <summary>The source column of the idle clip, looked up by name to match production.</summary>
+    private static int IdleSourceColumn { get; } = FindIdleSourceColumn();
+
+    private static int FindIdleSourceColumn()
+    {
+        foreach (var clip in SheetLayout.Clips.AsSpan())
+        {
+            if (clip.Name == "idle")
+            {
+                return clip.SourceColumn;
+            }
+        }
+
+        throw new InvalidOperationException("SheetLayout.Clips has no clip named 'idle'.");
+    }
+
+    /// <summary>Differently tints each facing row so a wrong row/facing mapping would show up as
+    /// the wrong colour, and gives one row a distinguishable per-channel value.</summary>
+    private static SKColor Tint(SKColor fill, int row) => row switch
+    {
+        1 => new SKColor(fill.Green, fill.Blue, fill.Red),
+        2 => new SKColor(fill.Blue, fill.Red, fill.Green),
+        _ => new SKColor((byte)~fill.Red, (byte)~fill.Green, (byte)~fill.Blue),
+    };
+
+    /// <summary>
+    /// A source-geometry partial written as PNG. Row 0 (south, what <c>RenderIdleRow</c> samples
+    /// in these tests) is <paramref name="fill"/> throughout except its one corner pixel, which is
+    /// set apart so an interpolated upscale blends it with its neighbours — a uniform cell would
+    /// leave <c>RenderIdleRow_UpscalesWithoutInterpolating</c> unable to fail on linear filtering.
+    /// The other three rows are tinted differently so a wrong facing mapping would be visible too.
+    /// </summary>
     private FullPath WritePartial(string name, SKColor fill)
     {
         using var bitmap = new SKBitmap(new SKImageInfo(
             SheetLayout.SourceWidth, SheetLayout.SourceHeight, SKColorType.Rgba8888, SKAlphaType.Unpremul));
 
         var pixels = bitmap.Pixels;
-        Array.Fill(pixels, fill);
+
+        for (var row = 0; row < SheetLayout.SourceRows; row++)
+        {
+            var tinted = row is 0 ? fill : Tint(fill, row);
+            var start = row * SheetLayout.CellSize * bitmap.Width;
+            var length = SheetLayout.CellSize * bitmap.Width;
+
+            Array.Fill(pixels, tinted, start, length);
+        }
+
+        // Never a ramp colour, so it survives every recolour untouched and contrasts with its
+        // fill-coloured neighbours.
+        pixels[IdleSourceColumn * SheetLayout.CellSize] = SKColors.Magenta;
+
         bitmap.Pixels = pixels;
 
         var path = _directory.FullPath / name;
@@ -133,7 +177,7 @@ public sealed class PalettePreviewTests : IDisposable
         preview.Dispose();
         preview.Dispose();
 
-        Assert.True(preview.IsDisposed);
+        Assert.Throws<ObjectDisposedException>(() => preview.RenderIdleRow(SkinRamps.Source, 1));
     }
 
     [Fact]
@@ -144,6 +188,34 @@ public sealed class PalettePreviewTests : IDisposable
         preview.Dispose();
 
         Assert.Throws<ObjectDisposedException>(() => preview.RenderIdleRow(SkinRamps.Source, 1));
+    }
+
+    [Fact]
+    public void Create_IgnoresTheRecipeRecolour_SoAnyRampCanBeSubstitutedLater()
+    {
+        var fill = SkinRamps.Source.Steps[3];
+
+        var recipe = new SheetRecipe
+        {
+            Name = "pre-toned",
+            Layers = [WritePartial("body.png", fill)],
+            Recolor = SkinRamps.All[5],
+        };
+
+        var created = PalettePreview.Create(recipe);
+
+        Assert.True(created.IsSuccessful, $"create failed with {created.Error}");
+
+        using var preview = created.Value;
+
+        var rendered = preview.RenderIdleRow(SkinRamps.Source, scale: 1);
+
+        Assert.True(rendered.IsSuccessful);
+
+        using var image = rendered.Value;
+
+        // The cache must hold source-toned pixels — rendering with Source is the identity.
+        Assert.Equal(fill, image.GetPixel(SheetLayout.CellSize / 2, SheetLayout.CellSize / 2));
     }
 
     [Fact]
