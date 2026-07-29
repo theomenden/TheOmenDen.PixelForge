@@ -4312,6 +4312,11 @@ Create `src/TheOmenDen.PixelForge/Views/PalettePage.xaml`:
             </CommandBar>
         </Grid>
 
+        <!--
+            Canonical form from the toolkit sample: an Auto-width column between the two content
+            columns, with a TranslateTransform pulling the splitter back over the boundary. Without
+            the transform a 16px splitter sits beside the seam rather than on it.
+        -->
         <controls:GridSplitter
             Grid.Row="1"
             Grid.Column="1"
@@ -4319,7 +4324,11 @@ Create `src/TheOmenDen.PixelForge/Views/PalettePage.xaml`:
             AutomationProperties.AutomationId="RampColumnSplitter"
             AutomationProperties.Name="Resize ramp list"
             ResizeBehavior="BasedOnAlignment"
-            ResizeDirection="Auto" />
+            ResizeDirection="Auto">
+            <controls:GridSplitter.RenderTransform>
+                <TranslateTransform X="-7" />
+            </controls:GridSplitter.RenderTransform>
+        </controls:GridSplitter>
 
         <!--  Editor  -->
         <ScrollViewer Grid.Row="1" Grid.Column="2" Padding="16,0,0,0">
@@ -5161,7 +5170,11 @@ Replace `src/TheOmenDen.PixelForge/Views/PipelinePage.xaml`:
                 AutomationProperties.AutomationId="SheetListSplitter"
                 AutomationProperties.Name="Resize sheet lists"
                 ResizeBehavior="BasedOnAlignment"
-                ResizeDirection="Auto" />
+                ResizeDirection="Auto">
+                <controls:GridSplitter.RenderTransform>
+                    <TranslateTransform X="-7" />
+                </controls:GridSplitter.RenderTransform>
+            </controls:GridSplitter>
 
             <ListView
                 Grid.Row="1"
@@ -5282,6 +5295,8 @@ Replace `src/TheOmenDen.PixelForge/Views/PipelinePage.xaml`:
 ```
 
 **Note on `SelectionMode="None"`:** the spec called for `SelectionMode="Multiple"`, which supplies checkboxes for free. It is not used here because each row also needs a status column and its own automation id, so the row template is explicit anyway — and `Multiple` would give a second, competing selection model on top of `IsSelected`.
+
+**Note on the equal-width split — do not "fix" this.** The `winui-design` anti-pattern table lists "equal-width 50/50 column split" against "fixed sidebar (300-360px) + flexible main". That rule is about *sidebar + content* layouts, where the sidebar is subordinate. Bodies and hair are **peer collections** of comparable size (7 and 9 items), neither subordinate to the other, so equal starting widths are correct — and the `GridSplitter` makes the split adjustable anyway. The palette page, which genuinely is sidebar + content, does use a fixed 320px start within the 300–360 band. A reviewer flagging this row as the anti-pattern is a false positive.
 
 - [ ] **Step 2: Update `PipelinePage.xaml.cs`**
 
