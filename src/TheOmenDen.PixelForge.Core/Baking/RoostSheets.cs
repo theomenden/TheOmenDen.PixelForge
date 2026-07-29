@@ -99,4 +99,43 @@ public static class RoostSheets
     /// <summary>Every sheet the spec ships, bodies first.</summary>
     public static ImmutableArray<SheetRecipe> All(SourcePacks packs) =>
         [.. Bodies(packs), .. Hair(packs)];
+
+    /// <summary>
+    /// The cross product of bodies and hair, composited into one sheet each.
+    /// <para>
+    /// Hair goes in <see cref="SheetRecipe.Overlays"/>, not <see cref="SheetRecipe.Layers"/>,
+    /// so it is drawn after the body's recolour and keeps its authored colour — see the
+    /// collision cases named on <see cref="BodyLayers"/>.
+    /// </para>
+    /// <para>
+    /// Flattening trades runtime flexibility for draw calls: a flattened pair is one texture,
+    /// but the hairstyle can no longer be swapped without rebaking. The layered sheets from
+    /// <see cref="All"/> remain the Corvus contract.
+    /// </para>
+    /// </summary>
+    public static ImmutableArray<SheetRecipe> Flattened(
+        IReadOnlyList<SheetRecipe> bodies,
+        IReadOnlyList<SheetRecipe> hair)
+    {
+        Guard.IsNotNull(bodies);
+        Guard.IsNotNull(hair);
+
+        var recipes = ImmutableArray.CreateBuilder<SheetRecipe>(bodies.Count * hair.Count);
+
+        foreach (var body in bodies)
+        {
+            foreach (var style in hair)
+            {
+                recipes.Add(new()
+                {
+                    Name = $"{body.Name}_{style.Name}",
+                    Layers = body.Layers,
+                    Recolor = body.Recolor,
+                    Overlays = style.Layers,
+                });
+            }
+        }
+
+        return recipes.ToImmutable();
+    }
 }
