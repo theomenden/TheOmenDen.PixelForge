@@ -3,44 +3,87 @@
     x:Class="TheOmenDen.PixelForge.Views.SettingsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <ScrollView Padding="24">
-        <StackPanel MaxWidth="1000" Spacing="24">
-
-            <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Settings" />
-
-            <StackPanel Spacing="8">
-                <TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Appearance" />
-
-                <Border
-                    Padding="16"
-                    Background="{ThemeResource ToolPanelBackgroundBrush}"
-                    BorderBrush="{ThemeResource ToolPanelBorderBrush}"
-                    BorderThickness="1"
-                    CornerRadius="{StaticResource OverlayCornerRadius}">
-                    <StackPanel Spacing="4">
-                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="App theme" />
-                        <TextBlock
-                            Style="{StaticResource CaptionTextBlockStyle}"
-                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                            Text="Applies immediately and is remembered between sessions." />
-
-                        <RadioButtons
-                            x:Name="ThemeSelector"
-                            AutomationProperties.AutomationId="ThemeSelector"
-                            AutomationProperties.Name="App theme"
-                            SelectedIndex="{x:Bind ViewModel.SelectedThemeIndex, Mode=TwoWay}">
-                            <x:String>Use system setting</x:String>
-                            <x:String>Light</x:String>
-                            <x:String>Dark</x:String>
-                        </RadioButtons>
-                    </StackPanel>
-                </Border>
+    <ScrollViewer>
+        <StackPanel Padding="24" Spacing="4">
+            <StackPanel Margin="0,0,0,16" Spacing="4">
+                <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Settings" />
+                <TextBlock
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Text="Appearance and source asset locations." />
             </StackPanel>
 
+            <TextBlock
+                Margin="0,0,0,8"
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Text="Appearance" />
+
+            <controls:SettingsCard Description="Applies immediately." Header="App theme">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE771;" />
+                </controls:SettingsCard.HeaderIcon>
+                <!--  Three short mutually-exclusive toggles — the same case as the export mode.  -->
+                <controls:Segmented
+                    AutomationProperties.AutomationId="ThemeSelector"
+                    AutomationProperties.Name="App theme"
+                    SelectedIndex="{x:Bind ViewModel.SelectedThemeIndex, Mode=TwoWay}"
+                    SelectionMode="Single">
+                    <controls:SegmentedItem Content="System" />
+                    <controls:SegmentedItem Content="Light" />
+                    <controls:SegmentedItem Content="Dark" />
+                </controls:Segmented>
+            </controls:SettingsCard>
+
+            <TextBlock
+                Margin="0,24,0,8"
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Text="Source packs" />
+
+            <InfoBar
+                x:Name="PacksHintBar"
+                Margin="0,0,0,8"
+                AutomationProperties.AutomationId="PacksHintBar"
+                IsClosable="False"
+                IsOpen="True"
+                Message="Time Elements packs are licensed art and are not shipped with PixelForge. Point each row at that pack's assets folder."
+                Severity="Informational" />
+
+            <controls:SettingsCard Description="{x:Bind ViewModel.CorePackPath, Mode=OneWay}" Header="Core pack">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8B7;" />
+                </controls:SettingsCard.HeaderIcon>
+                <Button
+                    AutomationProperties.AutomationId="BtnBrowseCorePack"
+                    AutomationProperties.Name="Browse for core pack folder"
+                    Command="{x:Bind ViewModel.BrowseCorePackCommand}"
+                    Content="Browse" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard Description="{x:Bind ViewModel.Expansion1PackPath, Mode=OneWay}" Header="Character Expansion 1">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8B7;" />
+                </controls:SettingsCard.HeaderIcon>
+                <Button
+                    AutomationProperties.AutomationId="BtnBrowseExpansion1Pack"
+                    AutomationProperties.Name="Browse for expansion 1 folder"
+                    Command="{x:Bind ViewModel.BrowseExpansion1PackCommand}"
+                    Content="Browse" />
+            </controls:SettingsCard>
+
+            <controls:SettingsCard Description="{x:Bind ViewModel.Expansion2PackPath, Mode=OneWay}" Header="Character Expansion 2">
+                <controls:SettingsCard.HeaderIcon>
+                    <FontIcon Glyph="&#xE8B7;" />
+                </controls:SettingsCard.HeaderIcon>
+                <Button
+                    AutomationProperties.AutomationId="BtnBrowseExpansion2Pack"
+                    AutomationProperties.Name="Browse for expansion 2 folder"
+                    Command="{x:Bind ViewModel.BrowseExpansion2PackCommand}"
+                    Content="Browse" />
+            </controls:SettingsCard>
         </StackPanel>
-    </ScrollView>
+    </ScrollViewer>
 </Page>
