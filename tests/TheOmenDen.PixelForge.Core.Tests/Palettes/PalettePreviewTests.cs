@@ -82,7 +82,7 @@ public sealed class PalettePreviewTests : IDisposable
         var recipe = new SheetRecipe
         {
             Name = "preview",
-            Layers = [WritePartial("body.png", fill)],
+            Layers = [new(WritePartial("body.png", fill), IsSkin: true)],
         };
 
         var created = PalettePreview.Create(recipe);
@@ -191,15 +191,15 @@ public sealed class PalettePreviewTests : IDisposable
     }
 
     [Fact]
-    public void Create_IgnoresTheRecipeRecolour_SoAnyRampCanBeSubstitutedLater()
+    public void Create_IgnoresTheRecipeTone_SoAnyRampCanBeSubstitutedLater()
     {
         var fill = SkinRamps.Source.Steps[3];
 
         var recipe = new SheetRecipe
         {
             Name = "pre-toned",
-            Layers = [WritePartial("body.png", fill)],
-            Recolor = SkinRamps.All[5],
+            Layers = [new(WritePartial("body.png", fill), IsSkin: true)],
+            Tone = SkinRamps.All[5],
         };
 
         var created = PalettePreview.Create(recipe);
@@ -224,7 +224,7 @@ public sealed class PalettePreviewTests : IDisposable
         var created = PalettePreview.Create(new SheetRecipe
         {
             Name = "absent",
-            Layers = [_directory.FullPath / "nope.png"],
+            Layers = [new(_directory.FullPath / "nope.png", IsSkin: true)],
         });
 
         Assert.False(created.IsSuccessful);

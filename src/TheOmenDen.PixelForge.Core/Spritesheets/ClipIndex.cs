@@ -9,7 +9,7 @@ using TheOmenDen.PixelForge.Core.Baking;
 namespace TheOmenDen.PixelForge.Core.Spritesheets;
 
 /// <summary>
-/// The manifest that makes a full-geometry sheet — the raw 23x4 assembly — self-describing.
+/// The manifest that makes a <see cref="SheetGeometry.Full"/> sheet self-describing.
 /// </summary>
 /// <remarks>
 /// <para>

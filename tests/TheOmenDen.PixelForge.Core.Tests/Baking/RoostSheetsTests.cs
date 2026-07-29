@@ -4,6 +4,11 @@ using TheOmenDen.PixelForge.Core.Palettes;
 
 namespace TheOmenDen.PixelForge.Core.Tests.Baking;
 
+/// <summary>
+/// The spec-079 table seeds every layer's <see cref="AssetLayer.IsSkin"/> flag from its slot, so
+/// these pin the seeding rather than the art. The body/hair cross product used to live here as
+/// <c>Flattened</c>; it moves to the batch planner, which builds it from a per-slot selection.
+/// </summary>
 public sealed class RoostSheetsTests
 {
     private static SourcePacks Packs { get; } = new()
@@ -13,54 +18,52 @@ public sealed class RoostSheetsTests
         Expansion2Assets = FullPath.FromPath(Path.Combine(Path.GetTempPath(), "x2")),
     };
 
-    [Fact]
-    public void Flattened_ProducesOneRecipePerBodyAndHairPair()
-    {
-        var bodies = RoostSheets.Bodies(Packs);
-        var hair = RoostSheets.Hair(Packs);
-
-        var flattened = RoostSheets.Flattened(bodies, hair);
-
-        Assert.Equal(bodies.Length * hair.Length, flattened.Length);
-    }
-
-    [Fact]
-    public void Flattened_NamesEachSheetForItsBodyAndHair()
-    {
-        var bodies = RoostSheets.Bodies(Packs);
-        var hair = RoostSheets.Hair(Packs);
-
-        var flattened = RoostSheets.Flattened(bodies, hair);
-
-        Assert.Equal("body-01_hair-01", flattened[0].Name);
-        Assert.Equal($"{bodies[^1].Name}_{hair[^1].Name}", flattened[^1].Name);
-    }
-
     /// <summary>
-    /// The body's layers and ramp carry over; the hair becomes an overlay so the recolour
-    /// cannot reach it.
+    /// Bottom, top and head are all skin-bearing, so a body's every layer takes the tone. The
+    /// tone itself must be present, or the flags would have nothing to act on.
     /// </summary>
     [Fact]
-    public void Flattened_CarriesTheBodyRamp_AndPutsHairInOverlays()
+    public void Bodies_MarkEveryLayerAsSkinAndCarryATone()
     {
         var bodies = RoostSheets.Bodies(Packs);
-        var hair = RoostSheets.Hair(Packs);
 
-        var flattened = RoostSheets.Flattened(bodies, hair);
+        Assert.Equal(SkinRamps.All.Length, bodies.Length);
 
-        Assert.Equal(bodies[0].Layers, flattened[0].Layers);
-        Assert.Equal(hair[0].Layers, flattened[0].Overlays);
+        foreach (var body in bodies)
+        {
+            Assert.All(body.Layers, layer => Assert.True(layer.IsSkin));
+            Assert.True(body.Tone.HasValue);
+        }
 
-        Assert.True(flattened[0].Recolor.TryGet(out var ramp));
+        Assert.True(bodies[0].Tone.TryGet(out var ramp));
         Assert.Equal(SkinRamps.All[0].Name, ramp.Name);
     }
 
+    /// <summary>
+    /// Hair keeps its authored colour — some styles use skin-ramp hexes as highlights — so no
+    /// hair layer may be marked skin and no hair recipe may carry a tone.
+    /// </summary>
     [Fact]
-    public void Flattened_ReturnsEmpty_WhenEitherSideIsEmpty()
+    public void Hair_MarksNoLayerAsSkinAndCarriesNoTone()
     {
-        var bodies = RoostSheets.Bodies(Packs);
+        var hair = RoostSheets.Hair(Packs);
 
-        Assert.Empty(RoostSheets.Flattened(bodies, []));
-        Assert.Empty(RoostSheets.Flattened([], RoostSheets.Hair(Packs)));
+        Assert.NotEmpty(hair);
+
+        foreach (var style in hair)
+        {
+            Assert.All(style.Layers, layer => Assert.False(layer.IsSkin));
+            Assert.False(style.Tone.HasValue);
+        }
+    }
+
+    [Fact]
+    public void All_IsBodiesThenHair()
+    {
+        var all = RoostSheets.All(Packs);
+
+        Assert.Equal(RoostSheets.Bodies(Packs).Length + RoostSheets.Hair(Packs).Length, all.Length);
+        Assert.Equal("body-01", all[0].Name);
+        Assert.StartsWith("hair-", all[^1].Name, StringComparison.Ordinal);
     }
 }
