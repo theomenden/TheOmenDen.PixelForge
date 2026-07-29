@@ -72,6 +72,7 @@ public partial class App : Application
         builder.Services.AddSingleton<PickerService>();
         builder.Services.AddSingleton<SettingsViewModel>();
         builder.Services.AddSingleton<PaletteViewModel>();
+        builder.Services.AddSingleton<BatchExportViewModel>();
 
         return builder.Build();
     }
