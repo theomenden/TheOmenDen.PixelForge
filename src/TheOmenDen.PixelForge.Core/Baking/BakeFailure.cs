@@ -44,4 +44,10 @@ public enum BakeFailure
 
     /// <summary>The encoded sheet did not decode back to the pixels that went in.</summary>
     RoundTripMismatch,
+
+    /// <summary>The output directory does not exist, or is not reachable.</summary>
+    OutputDirectoryUnavailable,
+
+    /// <summary>The sheet encoded, but the file could not be written.</summary>
+    OutputWriteFailed,
 }
