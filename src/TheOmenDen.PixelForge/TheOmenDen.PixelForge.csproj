@@ -83,6 +83,7 @@
     <PackageReference Include="CommunityToolkit.WinUI.Helpers" />
     <PackageReference Include="CommunityToolkit.WinUI.Triggers" />
     <PackageReference Include="Microsoft.Graphics.Win2D" />
+    <PackageReference Include="SkiaSharp.Views.WinUI" />
     <PackageReference Include="ColorCode.Core" />
   </ItemGroup>
 
