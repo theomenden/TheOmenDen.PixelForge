@@ -9,13 +9,11 @@ namespace TheOmenDen.PixelForge.Core.Tests.Baking;
 /// </summary>
 public sealed class BatchManifestTests
 {
-    // "Curated" is a string literal rather than nameof(SheetGeometry.Curated) because the geometry
-    // enum lands in a later task; Geometry is a string column either way.
     private static BatchManifestRow Row(string name) => new()
     {
         Name = name,
         File = name + ".webp",
-        Geometry = "Curated",
+        Geometry = nameof(SheetGeometry.Curated),
         Tone = "Tone 3",
         Bottom = "bottom1",
         Top = "top11",

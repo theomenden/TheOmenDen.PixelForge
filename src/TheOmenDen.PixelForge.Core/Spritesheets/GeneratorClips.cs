@@ -13,9 +13,8 @@ namespace TheOmenDen.PixelForge.Core.Spritesheets;
 /// the generator's decisions, not observations about the pixels.
 /// </para>
 /// <para>
-/// Used only by the full sheet geometry, which emits the raw 23x4 assembly. The curated Corvus
-/// sheet keeps its own eight-clip subset in <see cref="SheetLayout.Clips"/> and is unaffected by
-/// anything here.
+/// Used only by <see cref="Baking.SheetGeometry.Full"/> output. The curated Corvus sheet keeps its
+/// own eight-clip subset in <see cref="SheetLayout.Clips"/> and is unaffected by anything here.
 /// </para>
 /// </remarks>
 public static class GeneratorClips

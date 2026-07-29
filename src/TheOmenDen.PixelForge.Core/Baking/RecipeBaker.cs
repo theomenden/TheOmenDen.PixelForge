@@ -1,7 +1,5 @@
-using System.Collections.Immutable;
 using CommunityToolkit.Diagnostics;
 using DotNext;
-using Meziantou.Framework;
 using Microsoft.IO;
 using SkiaSharp;
 using TheOmenDen.PixelForge.Core.Palettes;
@@ -10,7 +8,7 @@ using TheOmenDen.PixelForge.Core.Spritesheets;
 namespace TheOmenDen.PixelForge.Core.Baking;
 
 /// <summary>
-/// Runs a <see cref="SheetRecipe"/> end to end: load, assemble, recolour, curate, encode.
+/// Runs a <see cref="SheetRecipe"/> end to end: load, recolour, assemble, curate, encode.
 /// <para>
 /// The encode step is <see cref="LosslessWebp.EncodeVerified"/>, so a recipe either yields a
 /// verified sheet or a <see cref="BakeFailure"/> — there is no path that returns an unchecked
@@ -23,6 +21,14 @@ namespace TheOmenDen.PixelForge.Core.Baking;
 /// </summary>
 public static class RecipeBaker
 {
+    /// <summary>
+    /// Bakes a recipe into a verified sheet in the geometry it asks for.
+    /// </summary>
+    /// <param name="recipe">The sheet to bake. Never <see langword="null"/>.</param>
+    /// <returns>
+    /// A pooled stream holding the encoded sheet, which the caller owns and must dispose, or the
+    /// first <see cref="BakeFailure"/> the assemble or encode hit.
+    /// </returns>
     public static Result<RecyclableMemoryStream, BakeFailure> Bake(SheetRecipe recipe)
     {
         Guard.IsNotNull(recipe);
@@ -41,13 +47,27 @@ public static class RecipeBaker
     }
 
     /// <summary>
-    /// Decodes a recipe's layers and composites them, stopping before the recolour. Overlays are
-    /// deliberately not applied — they belong after the substitution.
-    /// <para>
-    /// Exposed for the palette preview, which needs the assembly but neither the recolour nor an
-    /// encode. Sharing this is what keeps the decode-and-validate loop in one place.
-    /// </para>
+    /// Decodes a recipe's layers, recolours the skin-bearing ones, and composites the result in
+    /// draw order.
     /// </summary>
+    /// <param name="recipe">The sheet whose layers are wanted. Never <see langword="null"/>.</param>
+    /// <returns>
+    /// The assembled source-geometry bitmap, or the first failure encountered:
+    /// <see cref="BakeFailure.NoLayersSupplied"/>, <see cref="BakeFailure.LayerNotFound"/>,
+    /// <see cref="BakeFailure.LayerUnreadable"/> or a geometry or format mismatch.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// The substitution runs per layer, before compositing, rather than once over the flattened
+    /// result. That is what lets a bare-armed top take the skin tone while a hat's ramp-coloured
+    /// trim keeps its authored one, and it is the only ordering that works for back-hair, which
+    /// draws beneath the body.
+    /// </para>
+    /// <para>
+    /// Exposed for the composite preview, which needs the assembly but neither a curate nor an
+    /// encode. Sharing it keeps the decode-and-validate loop in one place.
+    /// </para>
+    /// </remarks>
     public static Result<SKBitmap, BakeFailure> AssembleLayers(SheetRecipe recipe)
     {
         Guard.IsNotNull(recipe);
@@ -57,34 +77,56 @@ public static class RecipeBaker
             return new(BakeFailure.NoLayersSupplied);
         }
 
-        var loaded = new List<SKBitmap>(recipe.Layers.Length);
+        // The TryGet must stay inside the ternary: hoisting it into a `hasTone` local first loses
+        // the compiler's proof that `ramp` is non-null, and nullable analysis is an error here.
+        var substitution = recipe.Tone.TryGet(out var ramp)
+            ? ramp.SubstitutionFrom(SkinRamps.Source)
+            : default;
+
+        var hasTone = recipe.Tone.HasValue;
+        var prepared = new List<SKBitmap>(recipe.Layers.Length);
 
         try
         {
-            foreach (var path in recipe.Layers)
+            foreach (var layer in recipe.Layers)
             {
-                if (!File.Exists(path.Value))
+                if (!File.Exists(layer.Path.Value))
                 {
                     return new(BakeFailure.LayerNotFound);
                 }
 
-                // No format pinning needed here: layers are only ever read by SKCanvas, which
-                // handles any colour type. Assemble is what returns canonical pixels.
-                var layer = SKBitmap.Decode(path.Value);
+                using var decoded = SKBitmap.Decode(layer.Path.Value);
 
-                if (layer is null)
+                if (decoded is null)
                 {
                     return new(BakeFailure.LayerUnreadable);
                 }
 
-                loaded.Add(layer);
+                if (decoded.Width != SheetLayout.SourceWidth || decoded.Height != SheetLayout.SourceHeight)
+                {
+                    return new(BakeFailure.LayerGeometryMismatch);
+                }
+
+                // Recolour before compositing. ToCanonical is required either way — Skia's
+                // preferred type on Windows is BGRA, and the substitution reads pixel memory
+                // directly — so the non-skin path is a format conversion, not a wasted pass.
+                var canonical = layer.IsSkin && hasTone
+                    ? SheetBaker.Recolor(decoded, substitution)
+                    : SheetBaker.ToCanonical(decoded);
+
+                if (!canonical.TryGet(out var ready))
+                {
+                    return new(canonical.Error);
+                }
+
+                prepared.Add(ready);
             }
 
-            return SheetBaker.Assemble(loaded);
+            return SheetBaker.Assemble(prepared);
         }
         finally
         {
-            foreach (var layer in loaded)
+            foreach (var layer in prepared)
             {
                 layer.Dispose();
             }
@@ -95,115 +137,22 @@ public static class RecipeBaker
         SKBitmap assembled,
         SheetRecipe recipe)
     {
-        SKBitmap? toned = null;
-        SKBitmap? overlaid = null;
-
-        try
+        if (recipe.Geometry is SheetGeometry.Full)
         {
-            var subject = assembled;
-
-            if (recipe.Recolor.TryGet(out var ramp))
-            {
-                var recolored = SheetBaker.Recolor(subject, ramp.SubstitutionFrom(SkinRamps.Source));
-
-                if (!recolored.TryGet(out toned))
-                {
-                    return new(recolored.Error);
-                }
-
-                subject = toned;
-            }
-
-            if (!recipe.Overlays.IsDefaultOrEmpty)
-            {
-                var composited = ApplyOverlays(subject, recipe.Overlays);
-
-                if (!composited.TryGet(out overlaid))
-                {
-                    return new(composited.Error);
-                }
-
-                subject = overlaid;
-            }
-
-            var curation = SheetBaker.Curate(subject);
-
-            if (!curation.TryGet(out var curated))
-            {
-                return new(curation.Error);
-            }
-
-            using (curated)
-            {
-                return LosslessWebp.EncodeVerified(curated);
-            }
+            // Full geometry *is* the assembly — no remap, so nothing to curate.
+            return LosslessWebp.EncodeVerified(assembled);
         }
-        finally
+
+        var curation = SheetBaker.Curate(assembled);
+
+        if (!curation.TryGet(out var curated))
         {
-            toned?.Dispose();
-            overlaid?.Dispose();
+            return new(curation.Error);
         }
-    }
 
-    /// <summary>
-    /// Draws overlay partials over an already-recoloured assembly. Compositing happens on a
-    /// premultiplied surface because that is what Skia draws into, then converts back to the
-    /// canonical unpremultiplied format — the same round trip <see cref="SheetBaker.Assemble"/>
-    /// makes, and exact for the strictly binary alpha this art uses.
-    /// </summary>
-    private static Result<SKBitmap, BakeFailure> ApplyOverlays(
-        SKBitmap subject,
-        ImmutableArray<FullPath> overlays)
-    {
-        var loaded = new List<SKBitmap>(overlays.Length);
-
-        try
+        using (curated)
         {
-            foreach (var path in overlays)
-            {
-                if (!File.Exists(path.Value))
-                {
-                    return new(BakeFailure.LayerNotFound);
-                }
-
-                var overlay = SKBitmap.Decode(path.Value);
-
-                if (overlay is null)
-                {
-                    return new(BakeFailure.LayerUnreadable);
-                }
-
-                loaded.Add(overlay);
-
-                if (overlay.Width != SheetLayout.SourceWidth || overlay.Height != SheetLayout.SourceHeight)
-                {
-                    return new(BakeFailure.LayerGeometryMismatch);
-                }
-            }
-
-            using var composited = new SKBitmap(new SKImageInfo(
-                SheetLayout.SourceWidth, SheetLayout.SourceHeight,
-                SKColorType.Rgba8888, SKAlphaType.Premul));
-
-            using (var canvas = new SKCanvas(composited))
-            {
-                canvas.Clear(SKColors.Transparent);
-                canvas.DrawBitmap(subject, 0, 0, SheetBaker.PixelExact);
-
-                foreach (var overlay in loaded)
-                {
-                    canvas.DrawBitmap(overlay, 0, 0, SheetBaker.PixelExact);
-                }
-            }
-
-            return SheetBaker.ToCanonical(composited);
-        }
-        finally
-        {
-            foreach (var overlay in loaded)
-            {
-                overlay.Dispose();
-            }
+            return LosslessWebp.EncodeVerified(curated);
         }
     }
 }

@@ -87,7 +87,7 @@ public sealed class BatchBakerTests : IDisposable
 
         for (var i = 0; i < count; i++)
         {
-            recipes.Add(new() { Name = $"sheet-{i:00}", Layers = [layer] });
+            recipes.Add(new() { Name = $"sheet-{i:00}", Layers = [new(layer, IsSkin: false)] });
         }
 
         return recipes.ToImmutable();
@@ -136,7 +136,7 @@ public sealed class BatchBakerTests : IDisposable
         var recipes = GoodRecipes(2).Add(new SheetRecipe
         {
             Name = "broken",
-            Layers = [_directory.FullPath / "absent.png"],
+            Layers = [new(_directory.FullPath / "absent.png", IsSkin: false)],
         });
 
         var summary = await BatchBaker.RunAsync(
@@ -156,7 +156,7 @@ public sealed class BatchBakerTests : IDisposable
         var recipes = ImmutableArray.Create(new SheetRecipe
         {
             Name = "broken",
-            Layers = [_directory.FullPath / "absent.png"],
+            Layers = [new(_directory.FullPath / "absent.png", IsSkin: false)],
         });
 
         await BatchBaker.RunAsync(recipes, output, progress, 1, TestContext.Current.CancellationToken);
@@ -269,11 +269,11 @@ public sealed class BatchBakerTests : IDisposable
 
         for (var i = 0; i < count; i++)
         {
-            var layers = ImmutableArray.CreateBuilder<FullPath>(count - i);
+            var layers = ImmutableArray.CreateBuilder<AssetLayer>(count - i);
 
             for (var j = 0; j < count - i; j++)
             {
-                layers.Add(layer);
+                layers.Add(new(layer, IsSkin: false));
             }
 
             recipes.Add(new() { Name = $"sheet-{i:00}", Layers = layers.ToImmutable() });

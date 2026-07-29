@@ -56,12 +56,22 @@ public sealed class PalettePreview : Disposable
 
     /// <summary>
     /// Bakes <paramref name="body"/> without its recolour and caches the curated sheet.
-    /// <see cref="SheetRecipe.Recolor"/> is ignored on purpose: the cache must hold source-toned
-    /// pixels so any ramp can be substituted in later.
     /// </summary>
+    /// <param name="body">The recipe to preview.</param>
+    /// <returns>
+    /// The preview, which the caller owns and must dispose, or the <see cref="BakeFailure"/> the
+    /// assemble or curate hit.
+    /// </returns>
+    /// <remarks>
+    /// <see cref="SheetRecipe.Tone"/> is cleared on purpose rather than merely ignored: the cache
+    /// must hold source-toned pixels so any ramp can be substituted in later, and clearing it is
+    /// what makes that true for a recipe that already carries one.
+    /// </remarks>
     public static Result<PalettePreview, BakeFailure> Create(SheetRecipe body)
     {
-        var assembly = RecipeBaker.AssembleLayers(body);
+        Guard.IsNotNull(body);
+
+        var assembly = RecipeBaker.AssembleLayers(body with { Tone = Optional<SkinRamp>.None });
 
         if (!assembly.TryGet(out var assembled))
         {

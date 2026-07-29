@@ -18,8 +18,8 @@ public sealed record BatchManifestRow
     public required string File { get; init; }
 
     /// <summary>
-    /// Which output geometry was written — the curated Corvus sheet, or the full raw 23x4
-    /// assembly. Carried as text so the manifest stays readable without the enum to hand.
+    /// Which <see cref="SheetGeometry"/> was written. Carried as text so the manifest stays
+    /// readable without the enum to hand.
     /// </summary>
     public required string Geometry { get; init; }
 

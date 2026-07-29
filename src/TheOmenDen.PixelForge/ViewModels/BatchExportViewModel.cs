@@ -280,10 +280,38 @@ public sealed partial class BatchExportViewModel : ObservableObject
         return Mode switch
         {
             ExportMode.Layered => [.. bodies, .. hair],
-            ExportMode.Flattened => RoostSheets.Flattened(bodies, hair),
-            _ => [.. bodies, .. hair, .. RoostSheets.Flattened(bodies, hair)],
+            ExportMode.Flattened => Flatten(bodies, hair),
+            _ => [.. bodies, .. hair, .. Flatten(bodies, hair)],
         };
     }
+
+    /// <summary>The cross product of bodies and hair, composited into one sheet each.</summary>
+    /// <param name="bodies">The selected body recipes.</param>
+    /// <param name="hair">The selected hair recipes.</param>
+    /// <returns>One recipe per pair, empty when either side is.</returns>
+    /// <remarks>
+    /// <para>
+    /// A flattened pair is simply both layer lists concatenated, because the skin substitution is
+    /// per layer: the body's layers are marked <see cref="AssetLayer.IsSkin"/> and take the tone,
+    /// while hair's are not and keep their authored colour. That is what replaced the old
+    /// <c>Overlays</c> collection, which had to draw hair after a whole-assembly recolour.
+    /// </para>
+    /// <para>
+    /// Flattening trades runtime flexibility for draw calls: one texture per pair, but the
+    /// hairstyle can no longer be swapped without rebaking.
+    /// </para>
+    /// </remarks>
+    private static ImmutableArray<SheetRecipe> Flatten(
+        ImmutableArray<SheetRecipe> bodies,
+        ImmutableArray<SheetRecipe> hair) =>
+    [
+        .. bodies.AsSpan().SelectMany(_ => hair, static (body, style) => new SheetRecipe
+        {
+            Name = $"{body.Name}_{style.Name}",
+            Layers = [.. body.Layers, .. style.Layers],
+            Tone = body.Tone,
+        }),
+    ];
 
     private static ImmutableArray<SheetRecipe> Selected(ObservableCollection<SheetSelectionItem> items)
     {
