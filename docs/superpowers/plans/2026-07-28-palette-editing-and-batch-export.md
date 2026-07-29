@@ -3097,9 +3097,10 @@ git commit -m "feat(app): add packaged-safe folder and file pickers"
 - Consumes: `RampStore`, `RampFailure`, `SkinRamp`, `SkinRamps` (Task 6); `AppPaths.RampStoreFile` (Task 8).
 - Produces:
   - `RampService.Ramps` → `ObservableCollection<SkinRamp>` — **the single source**, built-ins first, wrapped by Task 13's `AdvancedCollectionView`
-  - `RampService.BuiltIn` → `ImmutableArray<SkinRamp>`
   - `RampService.Custom` → `IEnumerable<SkinRamp>` (computed: everything in `Ramps` that is not built-in)
-  - `RampService.IsBuiltIn(SkinRamp)` → `bool`
+  - `RampService.IsBuiltIn(SkinRamp)` → `bool` — reads `SkinRamps.All` directly
+
+  **A `BuiltIn` property was originally listed here and has been removed from the contract.** It had no consumer, and as a pure passthrough to static data it tripped CA1822, which was then suppressed to keep it. Making it `static` instead is *not* a fix: C# rejects `_ramps.BuiltIn` with **CS0176** (instance access to a static member), so it would break the first caller and any `x:Bind`. `IsBuiltIn` uses `SkinRamps.All` directly and nothing else needs the surface.
   - `RampService.Load()` → `Result<int, RampFailure>`
   - `RampService.Save()` → `Result<int, RampFailure>`
   - `RampService.Add(SkinRamp)` / `Replace(string name, SkinRamp)` / `Remove(string name)` → `Result<int, RampFailure>`
