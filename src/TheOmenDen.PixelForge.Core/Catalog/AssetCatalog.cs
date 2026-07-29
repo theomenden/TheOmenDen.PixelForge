@@ -71,53 +71,12 @@ public sealed class AssetCatalog
             }
         }
 
-        var builders = new Dictionary<AssetSlot, ImmutableArray<AssetPartial>.Builder>();
-
-        foreach (var slot in AssetSlots.DrawOrder)
-        {
-            builders[slot] = ImmutableArray.CreateBuilder<AssetPartial>();
-        }
-
+        var builders = NewBuilders();
         var total = 0;
 
         foreach (var (pack, assets) in roots)
         {
-            foreach (var slot in AssetSlots.DrawOrder)
-            {
-                // A slot folder legitimately missing from a pack is normal, not a failure:
-                // expansion 2 ships no frontextra, and only the core pack ships a shadow.
-                var directory = new DirectoryInfo((assets / AssetSlots.FolderName(slot)).Value);
-
-                if (!directory.Exists)
-                {
-                    continue;
-                }
-
-                // ZLinq.FileSystem's value-enumerable walk, the project's stated replacement for
-                // Directory.EnumerateFiles + LINQ. The extension sits in the ZLinq namespace,
-                // which GlobalUsings.cs already imports assembly-wide.
-                foreach (var entry in directory.Children())
-                {
-                    if (entry is not FileInfo file
-                        || !file.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    var (baseName, variant) = AssetName.Split(Path.GetFileNameWithoutExtension(file.Name));
-
-                    builders[slot].Add(new()
-                    {
-                        Slot = slot,
-                        Pack = pack,
-                        Base = baseName,
-                        Variant = variant,
-                        Path = FullPath.FromPath(file.FullName),
-                    });
-
-                    total++;
-                }
-            }
+            total += Collect(builders, pack, assets);
         }
 
         if (total is 0)
@@ -125,19 +84,105 @@ public sealed class AssetCatalog
             return new(CatalogFailure.NoPartialsFound);
         }
 
-        var indexed = new Dictionary<AssetSlot, ImmutableArray<AssetPartial>>(builders.Count);
+        return new AssetCatalog(Index(builders));
+    }
 
-        foreach (var (slot, builder) in builders)
+    /// <summary>One empty builder per slot, so <see cref="Collect"/> never has to test for absence.</summary>
+    private static Dictionary<AssetSlot, ImmutableArray<AssetPartial>.Builder> NewBuilders()
+    {
+        var builders = new Dictionary<AssetSlot, ImmutableArray<AssetPartial>.Builder>(AssetSlots.DrawOrder.Length);
+
+        foreach (var slot in AssetSlots.DrawOrder)
         {
-            var ordered = builder.ToArray();
-
-            Array.Sort(ordered, static (left, right) => left.SortKey.CompareTo(right.SortKey));
-
-            indexed[slot] = [.. ordered];
+            builders[slot] = ImmutableArray.CreateBuilder<AssetPartial>();
         }
 
-        return new AssetCatalog(indexed.ToFrozenDictionary());
+        return builders;
     }
+
+    /// <summary>
+    /// Adds every partial one pack holds into <paramref name="builders"/>, and reports how many
+    /// were found.
+    /// </summary>
+    /// <remarks>
+    /// A slot folder legitimately missing from a pack is normal rather than a failure: expansion 2
+    /// ships no <c>frontextra</c>, and only the core pack ships a <c>shadow</c>. Only a missing
+    /// pack <em>root</em> is <see cref="CatalogFailure.PackDirectoryMissing"/>, and the caller has
+    /// already checked that.
+    /// </remarks>
+    private static int Collect(
+        Dictionary<AssetSlot, ImmutableArray<AssetPartial>.Builder> builders,
+        ElementsPack pack,
+        FullPath assets)
+    {
+        var found = 0;
+
+        foreach (var slot in AssetSlots.DrawOrder)
+        {
+            var directory = new DirectoryInfo((assets / AssetSlots.FolderName(slot)).Value);
+
+            if (!directory.Exists)
+            {
+                continue;
+            }
+
+            // ZLinq.FileSystem's value-enumerable walk, the project's stated replacement for
+            // Directory.EnumerateFiles + LINQ. The extension sits in the ZLinq namespace,
+            // which GlobalUsings.cs already imports assembly-wide.
+            foreach (var entry in directory.Children())
+            {
+                if (entry is not FileInfo file
+                    || !file.Name.EndsWith(".png", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var (baseName, variant) = AssetName.Split(Path.GetFileNameWithoutExtension(file.Name));
+
+                builders[slot].Add(new()
+                {
+                    Slot = slot,
+                    Pack = pack,
+                    Base = baseName,
+                    Variant = variant,
+                    Path = FullPath.FromPath(file.FullName),
+                });
+
+                found++;
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Freezes each slot's builder into display order — see <see cref="AssetSortKey"/> for why
+    /// ordering by the parsed key rather than by name is what puts <c>hair2</c> before <c>hair10</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Projects straight into the frozen dictionary rather than filling a
+    /// <see cref="Dictionary{TKey, TValue}"/> and freezing that afterwards, and sorts each builder
+    /// <em>in place</em> through <c>Sort</c> rather than copying it out to an array first. That
+    /// drops three intermediate allocations per slot — the staging dictionary, the array copy, and
+    /// the collection-expression rebuild.
+    /// </para>
+    /// <para>
+    /// Deliberately not a ZLinq chain: <see cref="Dictionary{TKey, TValue}"/> is not one of the
+    /// types the drop-in generator covers, so a bare <c>Select</c> here would quietly bind to
+    /// System.Linq. <c>ToFrozenDictionary</c> is a BCL API in any case.
+    /// </para>
+    /// </remarks>
+    private static FrozenDictionary<AssetSlot, ImmutableArray<AssetPartial>> Index(
+        Dictionary<AssetSlot, ImmutableArray<AssetPartial>.Builder> builders) =>
+        builders.ToFrozenDictionary(
+            static slotAndBuilder => slotAndBuilder.Key,
+            static slotAndBuilder =>
+            {
+                slotAndBuilder.Value.Sort(static (left, right) => left.SortKey.CompareTo(right.SortKey));
+
+                return slotAndBuilder.Value.ToImmutable();
+            });
 
     /// <summary>
     /// Every partial in <paramref name="slot"/>, base files and colour variants alike, in display

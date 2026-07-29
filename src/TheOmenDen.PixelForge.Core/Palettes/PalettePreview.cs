@@ -45,7 +45,9 @@ public sealed class PalettePreview : Disposable
     {
         for (var i = 0; i < SheetLayout.Clips.Length; i++)
         {
-            if (SheetLayout.Clips[i].Name == name)
+            // Ordinal, not the default operator: these are internal clip identifiers, so a
+            // culture-sensitive comparison would be both slower and wrong in principle.
+            if (string.Equals(SheetLayout.Clips[i].Name, name, StringComparison.Ordinal))
             {
                 return i;
             }

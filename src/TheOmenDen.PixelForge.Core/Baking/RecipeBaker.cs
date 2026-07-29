@@ -90,29 +90,7 @@ public static class RecipeBaker
         {
             foreach (var layer in recipe.Layers)
             {
-                if (!File.Exists(layer.Path.Value))
-                {
-                    return new(BakeFailure.LayerNotFound);
-                }
-
-                using var decoded = SKBitmap.Decode(layer.Path.Value);
-
-                if (decoded is null)
-                {
-                    return new(BakeFailure.LayerUnreadable);
-                }
-
-                if (decoded.Width != SheetLayout.SourceWidth || decoded.Height != SheetLayout.SourceHeight)
-                {
-                    return new(BakeFailure.LayerGeometryMismatch);
-                }
-
-                // Recolour before compositing. ToCanonical is required either way — Skia's
-                // preferred type on Windows is BGRA, and the substitution reads pixel memory
-                // directly — so the non-skin path is a format conversion, not a wasted pass.
-                var canonical = layer.IsSkin && hasTone
-                    ? SheetBaker.Recolor(decoded, substitution)
-                    : SheetBaker.ToCanonical(decoded);
+                var canonical = Prepare(layer, substitution, hasTone);
 
                 if (!canonical.TryGet(out var ready))
                 {
@@ -131,6 +109,48 @@ public static class RecipeBaker
                 layer.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// Decodes one layer, validates it, and returns it in canonical format — recoloured when the
+    /// layer carries skin and the recipe names a tone.
+    /// </summary>
+    /// <returns>
+    /// The prepared bitmap, which the caller owns and must dispose, or
+    /// <see cref="BakeFailure.LayerNotFound"/>, <see cref="BakeFailure.LayerUnreadable"/> or
+    /// <see cref="BakeFailure.LayerGeometryMismatch"/>.
+    /// </returns>
+    /// <remarks>
+    /// The recolour happens here, before compositing, rather than once over the flattened
+    /// assembly. <see cref="SheetBaker.ToCanonical"/> is required on both paths anyway — Skia's
+    /// preferred colour type on Windows is BGRA and the substitution reads pixel memory directly —
+    /// so the non-skin branch is a format conversion, not a wasted pass.
+    /// </remarks>
+    private static Result<SKBitmap, BakeFailure> Prepare(
+        AssetLayer layer,
+        RampSubstitution substitution,
+        bool hasTone)
+    {
+        if (!File.Exists(layer.Path.Value))
+        {
+            return new(BakeFailure.LayerNotFound);
+        }
+
+        using var decoded = SKBitmap.Decode(layer.Path.Value);
+
+        if (decoded is null)
+        {
+            return new(BakeFailure.LayerUnreadable);
+        }
+
+        if (decoded.Width != SheetLayout.SourceWidth || decoded.Height != SheetLayout.SourceHeight)
+        {
+            return new(BakeFailure.LayerGeometryMismatch);
+        }
+
+        return layer.IsSkin && hasTone
+            ? SheetBaker.Recolor(decoded, substitution)
+            : SheetBaker.ToCanonical(decoded);
     }
 
     private static Result<RecyclableMemoryStream, BakeFailure> Finish(

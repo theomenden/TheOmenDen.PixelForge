@@ -52,10 +52,7 @@ public static class BatchBaker
         }
 
         var total = recipes.Length;
-        var completed = 0;
-        var succeeded = 0;
-        var failed = 0;
-        var written = 0L;
+        var tally = new RunTally();
         var cancelled = false;
 
         var options = new ParallelOptions
@@ -70,33 +67,7 @@ public static class BatchBaker
             {
                 token.ThrowIfCancellationRequested();
 
-                var outcome = BakeOne(recipe, outputDirectory);
-
-                // Interlocked rather than a lock: four independent counters, touched once per
-                // recipe. A lock here would serialise the reporting of work already done in
-                // parallel.
-                var position = Interlocked.Increment(ref completed);
-                var size = Optional<ByteSize>.None;
-
-                if (outcome.TryGet(out var actual))
-                {
-                    Interlocked.Increment(ref succeeded);
-                    Interlocked.Add(ref written, actual.Value);
-                    size = actual;
-                }
-                else
-                {
-                    Interlocked.Increment(ref failed);
-                }
-
-                progress?.Report(new()
-                {
-                    Name = recipe.Name,
-                    Written = size,
-                    Failure = outcome.Error,
-                    Completed = position,
-                    Total = total,
-                });
+                BakeAndReport(recipe, outputDirectory, tally, progress, total);
 
                 return ValueTask.CompletedTask;
             }).ConfigureAwait(false);
@@ -108,11 +79,98 @@ public static class BatchBaker
 
         return new()
         {
-            Succeeded = succeeded,
-            Failed = failed,
-            TotalWritten = ByteSize.FromBytes(written),
+            Succeeded = tally.Succeeded,
+            Failed = tally.Failed,
+            TotalWritten = ByteSize.FromBytes(tally.Written),
             Cancelled = cancelled,
         };
+    }
+
+    /// <summary>
+    /// The counters one run accumulates, incremented from several worker threads at once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="Interlocked"/> rather than a lock: these are independent counters, each touched
+    /// once per recipe. A lock would serialise the reporting of work that was deliberately done in
+    /// parallel.
+    /// </para>
+    /// <para>
+    /// A type rather than four captured locals so the increments have one named home and the
+    /// concurrency contract is stated once, where the fields live, instead of in a comment beside
+    /// a lambda.
+    /// </para>
+    /// </remarks>
+    private sealed class RunTally
+    {
+        private int _completed;
+        private int _succeeded;
+        private int _failed;
+        private long _written;
+
+        /// <summary>How many recipes finished, successfully or not.</summary>
+        public int Completed => _completed;
+
+        /// <summary>How many recipes produced a verified sheet.</summary>
+        public int Succeeded => _succeeded;
+
+        /// <summary>How many recipes failed.</summary>
+        public int Failed => _failed;
+
+        /// <summary>Total bytes written across the run.</summary>
+        public long Written => _written;
+
+        /// <summary>Records a written sheet and returns this recipe's completion position.</summary>
+        public int RecordSuccess(ByteSize size)
+        {
+            Interlocked.Increment(ref _succeeded);
+            Interlocked.Add(ref _written, size.Value);
+
+            return Interlocked.Increment(ref _completed);
+        }
+
+        /// <summary>Records a failed recipe and returns its completion position.</summary>
+        public int RecordFailure()
+        {
+            Interlocked.Increment(ref _failed);
+
+            return Interlocked.Increment(ref _completed);
+        }
+    }
+
+    /// <summary>
+    /// Bakes one recipe, tallies the outcome, and reports it. Runs on a thread-pool worker, so it
+    /// touches nothing but <paramref name="tally"/> and the caller's progress sink.
+    /// </summary>
+    private static void BakeAndReport(
+        SheetRecipe recipe,
+        FullPath outputDirectory,
+        RunTally tally,
+        IProgress<BakeProgress>? progress,
+        int total)
+    {
+        var outcome = BakeOne(recipe, outputDirectory);
+        var size = Optional<ByteSize>.None;
+        var position = 0;
+
+        if (outcome.TryGet(out var actual))
+        {
+            size = actual;
+            position = tally.RecordSuccess(actual);
+        }
+        else
+        {
+            position = tally.RecordFailure();
+        }
+
+        progress?.Report(new()
+        {
+            Name = recipe.Name,
+            Written = size,
+            Failure = outcome.Error,
+            Completed = position,
+            Total = total,
+        });
     }
 
     /// <summary>
