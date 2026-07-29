@@ -75,8 +75,8 @@ Enumerated before designing, including where a package genuinely lacks the thing
 | Collapsible per-slot groups | `CommunityToolkit.WinUI.Controls.SettingsControls` — **`SettingsExpander`** (`ItemsSource`, `ItemTemplate`, header content) and **`SettingsCard`**, already referenced | **Use them.** A slot is a header (name, count, variants toggle) plus an expandable item list — the control's exact shape. Hand-rolling `Expander` + `StackPanel` is the documented anti-pattern. |
 | Live filter + sort of slot lists | `CommunityToolkit.WinUI.Collections` — **`AdvancedCollectionView`**, `SortDescription<T>`, already referenced | **Use it.** Filtering by a search box without rebuilding `ObservableCollection`s by hand. **`SortDescription<T>` (generic), never the string-property overload** — the package's own message says the latter resolves the property by reflection and is not trim-safe, and Release publishes `PublishTrimmed=true`. |
 | Tone swatch grid, variant chips | `CommunityToolkit.WinUI.Controls.Primitives` — **`UniformGrid`**, **`WrapPanel`**, already referenced | **Use them.** No hand-rolled `Grid` row/column arithmetic for a swatch grid that reflows. |
-| Mode → description switching | `Primitives` **`SwitchPresenter`** / `CaseCollection` | **Use it** in place of the current `ModeDescription` string property plus three consts — the mapping becomes declarative XAML with no converter. |
-| Search box | Built-in `AutoSuggestBox` | 156 bases across ten slots needs a filter; nothing to add. |
+| Mode → description switching | `Primitives` `SwitchPresenter` / `CaseCollection` | **Rejected.** The existing `ModeDescription` property already works and is covered by a passing UI test; swapping it for declarative XAML is churn with no functional gain and breaks that test. Keep the property. |
+| Search box | Built-in `AutoSuggestBox` | **Use it, but as a search field only.** The canonical sample drives a *suggestion dropdown*, filtering in `TextChanged` when `Reason == UserInput`. Here `ItemsSource` stays unset so no dropdown appears, and `Text` binds to a filter property that feeds `AdvancedCollectionView.Filter`. |
 | Queued run notifications | `CommunityToolkit.WinUI.Behaviors` `StackedNotificationsBehavior`, already wired on this page | Unchanged. |
 
 ## The pixel evidence that drives the design
@@ -240,8 +240,11 @@ frame order** — `Walk` is `[1,2,1,0]` and `Arms Up` is `[4,5,4,3]`, playback o
 contiguous spans, which the curated `SourceColumn`+`FrameCount` model cannot express — plus Climb's
 `ReverseDrawOrder` flag.
 
-`AnimationClip` gains a `Frames` array used by the full manifest. `SheetLayout.Clips` keeps
-`SourceColumn`/`FrameCount` so the curated path cannot drift.
+Full geometry gets its **own** clip type, `GeneratorClip`, carrying the frame list verbatim.
+`AnimationClip` and `SheetLayout.Clips` are left untouched rather than extended with a `Frames`
+array: the curated model is a start column plus a length, which is all the Corvus contract needs,
+and widening it would put the contract's type on the full-geometry change path for no benefit. Two
+small types, no shared drift surface.
 
 A third manifest, `sheets.csv`, maps every output file to its per-slot composition and tone. At 168
 files the filename alone is not a usable index.
