@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using System.Collections.ObjectModel;
 using DotNext;
 using Meziantou.Framework;
@@ -27,12 +26,6 @@ public sealed class RampService(ILogger<RampService> logger)
     /// </summary>
     public ObservableCollection<SkinRamp> Ramps { get; } = [.. SkinRamps.All];
 
-    // CA1822: flagged as not using instance data, but this is intentionally an instance member —
-    // part of the same instance-bound surface as Ramps/Custom that Task 13 binds to.
-#pragma warning disable CA1822
-    public ImmutableArray<SkinRamp> BuiltIn => SkinRamps.All;
-#pragma warning restore CA1822
-
     /// <summary>The user's ramps — everything that is not shipped.</summary>
     public IEnumerable<SkinRamp> Custom
     {
@@ -48,8 +41,8 @@ public sealed class RampService(ILogger<RampService> logger)
         }
     }
 
-    public bool IsBuiltIn(SkinRamp ramp) =>
-        BuiltIn.AsSpan().Any(r => string.Equals(r.Name, ramp.Name, StringComparison.OrdinalIgnoreCase));
+    public static bool IsBuiltIn(SkinRamp ramp) =>
+        SkinRamps.All.AsSpan().Any(r => string.Equals(r.Name, ramp.Name, StringComparison.OrdinalIgnoreCase));
 
     public Result<int, RampFailure> Load()
     {
@@ -219,13 +212,4 @@ public sealed class RampService(ILogger<RampService> logger)
 
         return null;
     }
-}
-
-/// <summary>
-/// Source-generated log methods — no boxing, and nothing is formatted when the level is off.
-/// </summary>
-internal static partial class RampServiceLog
-{
-    [LoggerMessage(Level = LogLevel.Information, Message = "Skipped imported ramp {Name}: name is a built-in")]
-    public static partial void SkippedBuiltInImport(this ILogger logger, string name);
 }
