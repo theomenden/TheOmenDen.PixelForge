@@ -23,6 +23,8 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
 
+        Shell = this;
+
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
@@ -40,6 +42,20 @@ public sealed partial class MainWindow : Window
         // created with the template, so it is null here and cannot be renamed from XAML.
         NavView.SelectedItem = NavView.MenuItems[0];
     }
+
+    /// <summary>
+    /// The live shell. A page that needs to send the user somewhere else in the app goes through
+    /// this rather than navigating <c>RootFrame</c> itself, which would leave the nav pane
+    /// highlighting the page just left.
+    /// </summary>
+    /// <remarks>Not <c>Current</c> — that name is already taken by <see cref="Window.Current"/>.</remarks>
+    internal static MainWindow? Shell { get; private set; }
+
+    /// <summary>
+    /// Selects the settings entry, routing through the same handler a click would. The entry is
+    /// created by the control, so it is reached as <c>NavView.SettingsItem</c>, not by name.
+    /// </summary>
+    internal void NavigateToSettings() => NavView.SelectedItem = NavView.SettingsItem;
 
     [LibraryImport("user32.dll")]
     private static partial uint GetDpiForWindow(IntPtr hWnd);

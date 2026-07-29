@@ -3,34 +3,272 @@
     x:Class="TheOmenDen.PixelForge.Views.PipelinePage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:behaviors="using:CommunityToolkit.WinUI.Behaviors"
+    xmlns:controls="using:CommunityToolkit.WinUI.Controls"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:interactivity="using:Microsoft.Xaml.Interactivity"
+    xmlns:local="using:TheOmenDen.PixelForge.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:ui="using:CommunityToolkit.WinUI"
+    xmlns:vm="using:TheOmenDen.PixelForge.ViewModels"
     mc:Ignorable="d">
 
     <Grid Padding="24" RowSpacing="16">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <StackPanel Spacing="4">
-            <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Pipeline" />
+            <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Batch export" />
             <TextBlock
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Text="Batch import, convert, and export texture assets." />
+                Text="Bake the selected sheets to lossless WebP, verified by round-trip." />
         </StackPanel>
 
-        <Border
+        <InfoBar
             Grid.Row="1"
-            Background="{ThemeResource ToolPanelBackgroundBrush}"
-            BorderBrush="{ThemeResource ToolPanelBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="{StaticResource OverlayCornerRadius}">
+            AutomationProperties.AutomationId="PacksMissingInfoBar"
+            IsClosable="False"
+            IsOpen="{x:Bind ViewModel.PacksMissing, Mode=OneWay}"
+            Message="Source pack folders are not configured. Set all three in Settings before exporting."
+            Severity="Warning">
+            <InfoBar.ActionButton>
+                <Button
+                    AutomationProperties.AutomationId="BtnGoToPackSettings"
+                    Click="OnGoToSettings"
+                    Content="Open Settings" />
+            </InfoBar.ActionButton>
+        </InfoBar>
+
+        <!--  Output and mode  -->
+        <Grid Grid.Row="2" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <TextBox
+                AutomationProperties.AutomationId="OutputFolderText"
+                AutomationProperties.Name="Output folder"
+                Header="Output folder"
+                IsReadOnly="True"
+                PlaceholderText="Choose a folder"
+                Text="{x:Bind ViewModel.OutputFolder, Mode=OneWay}" />
+
+            <Button
+                Grid.Column="1"
+                Margin="0,28,0,0"
+                AutomationProperties.AutomationId="BtnBrowseOutput"
+                AutomationProperties.Name="Browse for output folder"
+                Command="{x:Bind ViewModel.BrowseOutputCommand}"
+                Content="Browse" />
+
+            <StackPanel
+                Grid.Row="1"
+                Grid.ColumnSpan="2"
+                Margin="0,16,0,0"
+                Spacing="4">
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Mode" />
+
+                <!--
+                    Segmented, not RadioButtons: three short mutually-exclusive toggles is the
+                    control's stated use (2-5 items, no overflow), and it reads as a mode switch
+                    rather than a settings choice.
+                -->
+                <!--
+                    SelectedIndex is driven from code-behind, not a TwoWay x:Bind. Segmented
+                    applies its initial index from OnApplyTemplate — after this page's bindings
+                    are live — so a TwoWay binding races the user: switch mode quickly enough
+                    after the page appears and the control's deferred initialisation writes its
+                    own index back over the choice. That silently exports Layered.
+                -->
+                <controls:Segmented
+                    x:Name="ExportModeSegmented"
+                    AutomationProperties.AutomationId="ExportModeSegmented"
+                    AutomationProperties.Name="Export mode"
+                    SelectionChanged="OnExportModeChanged"
+                    SelectionMode="Single">
+                    <controls:SegmentedItem Content="Layered" Icon="{ui:FontIcon Glyph=&#xE81E;}" />
+                    <controls:SegmentedItem Content="Flattened" Icon="{ui:FontIcon Glyph=&#xE7C4;}" />
+                    <controls:SegmentedItem Content="Both" Icon="{ui:FontIcon Glyph=&#xE8C6;}" />
+                </controls:Segmented>
+                <TextBlock
+                    AutomationProperties.AutomationId="ExportModeDescription"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind ViewModel.ModeDescription, Mode=OneWay}"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+        </Grid>
+
+        <!--  Selection  -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="200" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" MinWidth="200" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Bodies" />
             <TextBlock
-                HorizontalAlignment="Center"
+                Grid.Column="2"
+                Style="{StaticResource BodyStrongTextBlockStyle}"
+                Text="Hair" />
+
+            <!--
+                Equal starting widths, not the 300-360px sidebar the design rubric asks for:
+                bodies and hair are peer collections of comparable size, neither subordinate to
+                the other. The splitter makes the split adjustable anyway.
+            -->
+            <controls:GridSplitter
+                Grid.Row="1"
+                Grid.Column="1"
+                Width="16"
+                AutomationProperties.AutomationId="SheetListSplitter"
+                AutomationProperties.Name="Resize sheet lists"
+                ResizeBehavior="BasedOnAlignment"
+                ResizeDirection="Auto">
+                <controls:GridSplitter.RenderTransform>
+                    <TranslateTransform X="-7" />
+                </controls:GridSplitter.RenderTransform>
+            </controls:GridSplitter>
+
+            <!--
+                SelectionMode="None" with explicit CheckBox rows: each row also carries a status
+                column and its own automation id, so the template is explicit regardless, and
+                ListView's own Multiple selection would be a second model competing with IsSelected.
+            -->
+            <ListView
+                Grid.Row="1"
+                AutomationProperties.AutomationId="BodySheetList"
+                AutomationProperties.Name="Body sheets"
+                ItemsSource="{x:Bind ViewModel.Bodies, Mode=OneWay}"
+                SelectionMode="None">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SheetSelectionItem">
+                        <Grid Padding="0,4" ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <CheckBox
+                                AutomationProperties.AutomationId="{x:Bind AutomationId}"
+                                Content="{x:Bind Name}"
+                                IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{x:Bind Status, Mode=OneWay}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <ListView
+                Grid.Row="1"
+                Grid.Column="2"
+                AutomationProperties.AutomationId="HairSheetList"
+                AutomationProperties.Name="Hair sheets"
+                ItemsSource="{x:Bind ViewModel.Hair, Mode=OneWay}"
+                SelectionMode="None">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:SheetSelectionItem">
+                        <Grid Padding="0,4" ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <CheckBox
+                                AutomationProperties.AutomationId="{x:Bind AutomationId}"
+                                Content="{x:Bind Name}"
+                                IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
+                            <TextBlock
+                                Grid.Column="1"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{x:Bind Status, Mode=OneWay}" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+        </Grid>
+
+        <!--  Run  -->
+        <Grid Grid.Row="4" ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <ProgressBar
                 VerticalAlignment="Center"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Text="No pipeline steps configured." />
-        </Border>
+                AutomationProperties.AutomationId="ExportProgress"
+                AutomationProperties.Name="Export progress"
+                Maximum="100"
+                Value="{x:Bind ViewModel.ProgressValue, Mode=OneWay}" />
+
+            <TextBlock
+                Grid.Column="1"
+                VerticalAlignment="Center"
+                AutomationProperties.AutomationId="ExportProgressText"
+                Text="{x:Bind ViewModel.ProgressText, Mode=OneWay}" />
+
+            <StackPanel
+                Grid.Column="2"
+                Orientation="Horizontal"
+                Spacing="8">
+                <!--  What the current selection and mode would actually produce, before running it.  -->
+                <TextBlock
+                    VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="PlannedCountText"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind local:PipelinePage.PlannedLabel(ViewModel.PlannedCount), Mode=OneWay}" />
+                <Button
+                    AutomationProperties.AutomationId="BtnExport"
+                    Command="{x:Bind ViewModel.ExportCommand}"
+                    Content="Export"
+                    Style="{StaticResource AccentButtonStyle}" />
+                <Button
+                    AutomationProperties.AutomationId="BtnCancelExport"
+                    Command="{x:Bind ViewModel.ExportCancelCommand}"
+                    Content="Cancel"
+                    IsEnabled="{x:Bind ViewModel.IsExporting, Mode=OneWay}" />
+            </StackPanel>
+
+            <!--
+                Queued rather than a single caption line: a 79-sheet run can produce a summary
+                and a manifest failure, and the behavior stacks and times out each one.
+            -->
+            <InfoBar
+                Grid.Row="1"
+                Grid.ColumnSpan="3"
+                Margin="0,8,0,0"
+                AutomationProperties.AutomationId="ExportStatusBar">
+                <interactivity:Interaction.Behaviors>
+                    <behaviors:StackedNotificationsBehavior x:Name="StatusNotifications" />
+                </interactivity:Interaction.Behaviors>
+            </InfoBar>
+        </Grid>
     </Grid>
 </Page>
