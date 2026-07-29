@@ -64,7 +64,9 @@ Enumerated before designing, including where a package genuinely lacks the thing
 |---|---|---|
 | Directory walk for the catalog | `ZLinq.FileSystem` `1.5.6` — `FileSystemInfoExtensions.Children()` / `.Descendants()`, already referenced by `Core` | **Use it.** Value-enumerable walk, no new package, and it is the project's stated replacement for `Directory.EnumerateFiles` + LINQ. |
 | Natural ordering (`hair2` before `hair10`) | **Absent.** None of the referenced Meziantou packages (`Globbing`, `FullPath`, `ByteSize`, `TemporaryDirectory`, StronglyTypedId pair) ships a natural or logical string comparer. BCL has no portable one; `StrCmpLogicalW` is a Win32 P/Invoke and `Core` must stay Windows-free. | **No comparer needed.** The catalog already parses each file name; ordering by the parsed `(prefix, number, suffix)` tuple is correct by construction and also handles `shield1L`, `bow1arrow1`, `daggerL`, `crown1`. |
-| Per-pixel palette substitution | `System.Numerics.Vector<T>` — `Vector.Equals`, `Vector.ConditionalSelect`, `Vector<uint>.Count`, span ctor and `CopyTo`; `MemoryMarshal.Cast<byte, uint>` for a zero-copy view | **Use it.** See "SIMD recolour". `SKColorFilter.CreateTable` and `CreateColorMatrix` remain unable to express an arbitrary RGB→RGB lookup, which is why this loop is hand-written at all. |
+| Per-pixel palette substitution | `System.Numerics.Vector<T>` — `Vector.Equals`, `Vector.ConditionalSelect`, `Vector<uint>.Count`, span ctor and `CopyTo`; `MemoryMarshal.Cast<byte, uint>` for a zero-copy view | **Use it.** See "SIMD recolour". |
+| — same need, colour library | `ColorHelper` 1.8.1 — full public surface is `ColorConverter` (RGB/HSL/HSV/CMYK/XYZ/YIQ/YUV/HEX conversion), **`ColorComparer.Equals`**, `ColorGenerator`, and the colour structs | **Not for this.** `ColorComparer.Equals` compares two *individual* colours across models — a scalar helper, not an image operation. Driving 10⁸ pixels through it would construct an `RGB` per pixel and convert per comparison. Genuinely useful for palette-editor equality checks; wrong tool for the bake loop. |
+| — same need, Skia | **`SKRuntimeEffect`** (`CreateColorFilter`, `ToColorFilter`, `SKRuntimeColorFilterBuilder`) — present in SkiaSharp 4.151 | **Available, and rejected on merit — not absence.** SkSL *can* express an arbitrary RGB→RGB lookup, so the claim "no library can do this" (carried in `SheetBaker`'s remarks today) is **wrong and must be corrected in the code comment too**. Rejected because colour filters operate in float: an exact index-for-index substitution would need tolerance comparisons, and this pipeline's round-trip verification demands byte-exactness. It also adds a shader-compile failure mode and makes the substitution untestable as a pure function in `Core`. `SKColorFilter.CreateTable` (four independent per-channel lookups) and `CreateColorMatrix` (linear transform) genuinely cannot express it. |
 | Filename parsing | BCL `ReadOnlySpan<char>` + `LastIndexOf` | `Meziantou.Framework.Globbing` matches paths, it does not decompose names. A span split on a trailing `_c<digits>` is three lines. |
 | Cross-product expansion | **Absent** from ZLinq and System.Linq alike — neither ships a cartesian product over a variable number of sequences. | Hand-rolled odometer over the ten slot lists, ~15 lines. Stated because rolling our own is the exception. |
 | Manifests | `CsvHelper` 33.1.0, already used by `SheetIndex` | Same writer for the two new manifests. |
@@ -161,17 +163,42 @@ Replaced with `System.Numerics.Vector<uint>`:
 - Five `Vector.Equals` + `Vector.ConditionalSelect` pairs per vector width — 8 pixels at a time under
   AVX2, 16 under AVX-512. `Vector<T>` rather than `Vector256<T>` so the JIT picks the width instead
   of the source pinning an ISA.
-- Alpha is masked out of the comparison and re-ORed into the result, so a transparent pixel is never
-  rewritten. This is what keeps already-shipped curated sheets byte-identical.
 - A scalar tail handles the remainder, and that same scalar path is the reference the test compares
   the vector path against.
 
+**Alpha is part of the comparison, not masked out of it.** The obvious formulation masks off alpha,
+compares RGB, separately derives an "is opaque" mask, ANDs the two and re-ORs alpha into the result.
+None of that is necessary here. The source art has **strictly binary alpha**, so every opaque pixel
+has `A = 255`; packing the ramp colours with `A = 0xFF` and comparing the whole 32-bit pixel excludes
+transparent pixels automatically. The loop becomes compare-and-select with no masking, no alpha
+extraction and two fewer vector constants.
+
+Verified rather than assumed — all 995 partials decoded through the pipeline's own
+`Rgba8888`/`Unpremul` conversion:
+
+```
+files scanned            : 995
+files w/ partial alpha   : 0
+distinct partial alphas  : []
+ramp pixels, old test    : 571,148     (alpha != 0 && rgb in ramp)
+ramp pixels, full-32 test: 571,148     (pixel == 0xFF______)
+DISAGREEMENTS            : 0
+```
+
+This introduces **no new assumption**: `SheetBaker.Assemble` already depends on binary alpha — it is
+why its premultiplied round trip is documented as "exact rather than merely close". The failure mode
+is shared and worth naming: a future pack authored with antialiased edges would break the premul
+round trip *and* silently drop soft ramp pixels from the substitution. Binary alpha is a property of
+this art, not of PNG.
+
 **Byte-order trap.** The scalar key is `0xRRGGBB`. The same pixel read as a little-endian `uint` from
-RGBA8888 is `0xAABBGGRR`. The vectors need the ramp packed R-in-low-byte, so `SkinRamp` gains
-`PackedRgba` beside the existing `Pack`, with a test pinning the two against each other.
+RGBA8888 is `0xAABBGGRR`. The vectors need the ramp packed R-in-low-byte with alpha set, so `SkinRamp`
+gains `PackedRgba` beside the existing `Pack`, with a test pinning the two against each other.
 
 `SubstitutionFrom` returns a `RampSubstitution` (two `ImmutableArray<uint>`, from and to) instead of a
-`FrozenDictionary`; `System.Collections.Frozen` leaves `SheetBaker` entirely.
+`FrozenDictionary`; `System.Collections.Frozen` leaves `SheetBaker` entirely. Note that even the
+*scalar* five-compare form beats the current per-pixel hash lookup — SIMD is the second win, not the
+first.
 
 ### 4. Recipe and planning
 
@@ -271,7 +298,11 @@ behind the preset button, so the shipped contract stays reproducible.
 - Per-layer recolour — a bare-armed top recolours, `hat4` and `hair1` do not, `arrow1` keeps its
   wooden tan.
 - SIMD recolour — vector path equals scalar path over a buffer whose length is deliberately not a
-  multiple of `Vector<uint>.Count`; transparent pixels unchanged; `Pack` and `PackedRgba` agree.
+  multiple of `Vector<uint>.Count`; `Pack` and `PackedRgba` agree.
+- Binary-alpha dependency, made explicit — a transparent pixel whose RGB happens to equal a ramp
+  colour is left alone, and a pixel with `A = 128` and ramp RGB is **not** substituted. The second
+  case cannot occur in the shipped packs (verified across all 995 partials) and the test exists to
+  document the boundary rather than to guard live input.
 - Full-geometry manifest — frame orders match `Settings.json`, Climb carries `ReverseDrawOrder`.
 - Curated regression — a Roost recipe still produces the same bytes it produces today.
 
@@ -284,10 +315,14 @@ layout is visually broken.
 Rolling our own is the exception and needs a stated reason. After enumerating the packages, exactly
 three pieces of this design have no library form:
 
-1. **The palette substitution loop.** `SKColorFilter.CreateTable` applies four independent per-channel
-   lookups and `CreateColorMatrix` is a linear transform; neither can express "change this pixel only
-   when all three channels match". There is no library form of an arbitrary RGB→RGB lookup, which is
-   why the existing loop is hand-written and why the SIMD replacement stays hand-written.
+1. **The palette substitution loop** — hand-written by *choice*, not by absence. `SKColorFilter`
+   genuinely cannot express it (`CreateTable` is four independent per-channel lookups,
+   `CreateColorMatrix` is a linear transform), and `ColorHelper.ColorComparer` is a scalar cross-model
+   equality helper rather than an image operation. But **`SKRuntimeEffect` can** — SkSL expresses an
+   arbitrary RGB→RGB lookup fine. It is rejected because colour filters work in float, this
+   substitution must be byte-exact to survive round-trip verification, and a shader compile is a new
+   failure mode for a loop that is ten integer vector operations. `SheetBaker.Recolor`'s existing
+   remark claiming no library can do this is inaccurate and gets corrected as part of this work.
 2. **The cross-product odometer.** Neither ZLinq nor System.Linq ships a cartesian product over a
    variable number of sequences. ~15 lines over the ten slot lists.
 3. **The filename decomposition.** `Meziantou.Framework.Globbing` matches paths; it does not
