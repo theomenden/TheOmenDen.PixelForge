@@ -1,11 +1,22 @@
 using Meziantou.Framework;
 using SkiaSharp;
 using TheOmenDen.PixelForge.Core.Baking;
+using TheOmenDen.PixelForge.Core.Catalog;
 using TheOmenDen.PixelForge.Core.Palettes;
 using TheOmenDen.PixelForge.Core.Spritesheets;
 
 namespace TheOmenDen.PixelForge.Core.Tests.Palettes;
 
+/// <summary>
+/// Covers the palette editor's live preview: what it bakes once and caches, what it re-applies on
+/// every render, and that it scales up without interpolating.
+/// <para>
+/// Every case builds synthetic source-geometry PNGs rather than reading real art. The packs are
+/// licensed and live outside every repo, so a test that needed them could not run on a clean
+/// checkout — and synthetic fills make a wrong row, facing or draw order visible as a colour,
+/// which real art would not.
+/// </para>
+/// </summary>
 public sealed class PalettePreviewTests : IDisposable
 {
     private readonly TemporaryDirectory _directory = TemporaryDirectory.Create();
@@ -19,7 +30,7 @@ public sealed class PalettePreviewTests : IDisposable
     {
         foreach (var clip in SheetLayout.Clips.AsSpan())
         {
-            if (clip.Name == "idle")
+            if (string.Equals(clip.Name, "idle", StringComparison.Ordinal))
             {
                 return clip.SourceColumn;
             }
@@ -82,7 +93,7 @@ public sealed class PalettePreviewTests : IDisposable
         var recipe = new SheetRecipe
         {
             Name = "preview",
-            Layers = [WritePartial("body.png", fill)],
+            Layers = [new(WritePartial("body.png", fill), IsSkin: true)],
         };
 
         var created = PalettePreview.Create(recipe);
@@ -191,15 +202,15 @@ public sealed class PalettePreviewTests : IDisposable
     }
 
     [Fact]
-    public void Create_IgnoresTheRecipeRecolour_SoAnyRampCanBeSubstitutedLater()
+    public void Create_IgnoresTheRecipeTone_SoAnyRampCanBeSubstitutedLater()
     {
         var fill = SkinRamps.Source.Steps[3];
 
         var recipe = new SheetRecipe
         {
             Name = "pre-toned",
-            Layers = [WritePartial("body.png", fill)],
-            Recolor = SkinRamps.All[5],
+            Layers = [new(WritePartial("body.png", fill), IsSkin: true)],
+            Tone = SkinRamps.All[5],
         };
 
         var created = PalettePreview.Create(recipe);
@@ -218,13 +229,74 @@ public sealed class PalettePreviewTests : IDisposable
         Assert.Equal(fill, image.GetPixel(SheetLayout.CellSize / 2, SheetLayout.CellSize / 2));
     }
 
+    /// <summary>
+    /// A distinct opaque fill per slot, none of them a source-ramp hex — so the fills survive any
+    /// substitution untouched, and a layer that went missing or composited out of order surfaces
+    /// as the wrong colour rather than passing silently.
+    /// </summary>
+    private static SKColor FillFor(AssetSlot slot) => new(0x11, 0x22, (byte)(0x30 + ((int)slot * 0x10)));
+
+    /// <summary>
+    /// A whole character: one synthetic partial per slot, in generator draw order, with
+    /// <see cref="AssetLayer.IsSkin"/> seeded from <see cref="AssetSlots.IsSkinBearing"/> exactly
+    /// as the planner seeds it. This is the shape the batch path actually produces.
+    /// </summary>
+    private SheetRecipe FullyEquipped()
+    {
+        var layers = new List<AssetLayer>(AssetSlots.DrawOrder.Length);
+
+        foreach (var slot in AssetSlots.DrawOrder)
+        {
+            var partial = WritePartial($"{AssetSlots.FolderName(slot)}.png", FillFor(slot));
+
+            layers.Add(new(partial, AssetSlots.IsSkinBearing(slot)));
+        }
+
+        return new()
+        {
+            Name = "equipped",
+            Layers = [.. layers],
+            Tone = SkinRamps.All[4],
+        };
+    }
+
+    /// <summary>
+    /// <see cref="PalettePreview"/> was written when a body was three layers — bottom, top, head.
+    /// The batch path now hands it whole characters of up to ten, and nothing in the preview
+    /// should count layers. Nothing proved that until this test.
+    /// </summary>
+    [Fact]
+    public void Create_PreviewsAFullyEquippedRecipe()
+    {
+        var created = PalettePreview.Create(FullyEquipped());
+
+        Assert.True(created.IsSuccessful, $"create failed with {created.Error}");
+
+        using var preview = created.Value;
+
+        var rendered = preview.RenderIdleRow(SkinRamps.All[4], scale: 1);
+
+        Assert.True(rendered.IsSuccessful, $"render failed with {rendered.Error}");
+
+        using var image = rendered.Value;
+
+        Assert.Equal(PalettePreview.IdleRowWidth, image.Width);
+        Assert.Equal(PalettePreview.IdleRowHeight, image.Height);
+
+        // Weapon draws last and every fill is opaque, so the topmost fill winning is the evidence
+        // that all ten layers were decoded and composited in order rather than silently truncated.
+        Assert.Equal(
+            FillFor(AssetSlot.Weapon),
+            image.GetPixel(SheetLayout.CellSize / 2, SheetLayout.CellSize / 2));
+    }
+
     [Fact]
     public void Create_ReportsLayerNotFound_WhenAPartialIsMissing()
     {
         var created = PalettePreview.Create(new SheetRecipe
         {
             Name = "absent",
-            Layers = [_directory.FullPath / "nope.png"],
+            Layers = [new(_directory.FullPath / "nope.png", IsSkin: true)],
         });
 
         Assert.False(created.IsSuccessful);

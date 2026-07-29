@@ -1,8 +1,10 @@
-using System.Collections.Frozen;
+using System.Numerics;
+using System.Runtime.InteropServices;
 using CommunityToolkit.Diagnostics;
 using CommunityToolkit.HighPerformance;
 using DotNext;
 using SkiaSharp;
+using TheOmenDen.PixelForge.Core.Palettes;
 using TheOmenDen.PixelForge.Core.Spritesheets;
 
 namespace TheOmenDen.PixelForge.Core.Baking;
@@ -13,8 +15,9 @@ namespace TheOmenDen.PixelForge.Core.Baking;
 /// Compositing is Skia's (<see cref="SKCanvas"/>), the frame remap is
 /// CommunityToolkit's (<see cref="Span2D{T}"/> slice-and-copy), and format conversion is
 /// Skia's (<see cref="SKPixmap.ReadPixels(SKImageInfo, nint, int, int, int)"/>). The only
-/// hand-written pixel loop is <see cref="Recolor"/>, because a palette substitution is the one
-/// operation neither library can express — see the remarks there.
+/// hand-written pixel loop is <see cref="Recolor"/> — the one operation done by hand rather than
+/// delegated, and the remarks there record which library forms were considered and why each was
+/// rejected.
 /// </para>
 /// <para>
 /// Geometry and pixel format are validated as <see cref="BakeFailure"/> values rather than
@@ -106,21 +109,29 @@ public static class SheetBaker
     }
 
     /// <summary>
-    /// Applies a palette substitution, leaving every colour outside the table untouched.
-    /// Alpha is preserved, so a fully transparent pixel stays transparent.
+    /// Applies a palette substitution, leaving every colour outside the table untouched and every
+    /// transparent pixel exactly as it was.
     /// </summary>
+    /// <returns>
+    /// The recoloured bitmap in canonical format, or
+    /// <see cref="BakeFailure.LayerPixelFormatMismatch"/> when the source cannot be converted to it.
+    /// </returns>
     /// <remarks>
-    /// Hand-written on purpose. <c>SKColorFilter.CreateTable</c> applies four independent
-    /// per-channel lookup tables, which cannot express this mapping: a skin step must change
-    /// only when all three of its channels match, and a per-channel table would recolour every
-    /// pixel sharing a single channel value — silently rewriting garment and hair pixels that
-    /// legitimately reuse ramp bytes. <c>CreateColorMatrix</c> is a linear transform and is no
-    /// closer. There is no library form of an arbitrary RGB-to-RGB lookup.
+    /// <para>
+    /// Hand-written, but by choice rather than for want of a library.
+    /// <see cref="SKColorFilter"/>'s <c>CreateTable</c> applies four independent per-channel lookups
+    /// and cannot express "change this pixel only when all three channels match"; its
+    /// <c>CreateColorMatrix</c> is a linear transform and is no closer. Skia <em>can</em> express it
+    /// through <see cref="SKRuntimeEffect"/>, and <c>ColorHelper.ColorComparer</c> compares single
+    /// colours across colour models. Both were rejected: a runtime effect works in float, while this
+    /// substitution must be byte-exact to survive <see cref="LosslessWebp"/>'s
+    /// <c>EncodeVerified</c> round trip, and it would add a shader compile as a new failure mode;
+    /// <c>ColorComparer</c> is a scalar helper that would allocate per pixel.
+    /// </para>
     /// </remarks>
-    public static Result<SKBitmap, BakeFailure> Recolor(SKBitmap source, FrozenDictionary<uint, SKColor> substitution)
+    public static Result<SKBitmap, BakeFailure> Recolor(SKBitmap source, RampSubstitution substitution)
     {
         Guard.IsNotNull(source);
-        Guard.IsNotNull(substitution);
 
         var recolored = ToCanonical(source);
 
@@ -129,27 +140,112 @@ public static class SheetBaker
             return recolored;
         }
 
-        using var pixmap = target.PeekPixels();
-        var bytes = pixmap.GetPixelSpan();
-
-        for (var offset = 0; offset + SheetLayout.BytesPerPixel <= bytes.Length; offset += SheetLayout.BytesPerPixel)
+        if (substitution.IsIdentity)
         {
-            if (bytes[offset + 3] is 0)
-            {
-                continue;
-            }
-
-            var key = ((uint)bytes[offset] << 16) | ((uint)bytes[offset + 1] << 8) | bytes[offset + 2];
-
-            if (substitution.TryGetValue(key, out var replacement))
-            {
-                bytes[offset] = replacement.Red;
-                bytes[offset + 1] = replacement.Green;
-                bytes[offset + 2] = replacement.Blue;
-            }
+            return target;
         }
 
+        using var pixmap = target.PeekPixels();
+
+        // MemoryMarshal.Cast is a zero-copy reinterpretation. SKBitmap.Pixels would allocate an
+        // SKColor[] — 828 KiB for a source partial, straight to the LOH.
+        Substitute(MemoryMarshal.Cast<byte, uint>(pixmap.GetPixelSpan()), substitution);
+
         return target;
+    }
+
+    /// <summary>
+    /// Substitutes packed pixels in place, vectorised, with a scalar tail for the remainder.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Whole 32-bit pixels are compared, alpha included. That is only correct because the source
+    /// art has strictly binary alpha — verified across all 995 partials — so every opaque pixel is
+    /// <c>0xFF______</c> and no transparent pixel can equal an entry in
+    /// <see cref="RampSubstitution.From"/>. It buys the removal of a mask, a separate opacity test
+    /// and an alpha recombination from the inner loop, leaving five comparisons and five selects.
+    /// </para>
+    /// <para>
+    /// <see cref="Vector{T}"/> rather than <c>Vector256&lt;T&gt;</c> so the JIT picks the widest
+    /// register the machine has — 8 pixels at a time under AVX2, 16 under AVX-512 — instead of the
+    /// source pinning an instruction set.
+    /// </para>
+    /// <para>
+    /// Public rather than <see langword="internal"/> only so the test assembly can compare it
+    /// against <see cref="SubstituteScalar"/>, which is the sole proof the SIMD loop is right.
+    /// <c>InternalsVisibleTo</c> is not an option here: the ZLinq drop-in generator emits an
+    /// internal <c>ZLinqDropInExtensions</c> into every assembly, and making this one visible to a
+    /// project that has its own makes every drop-in call in it ambiguous. <see cref="Recolor"/>
+    /// remains the entry point callers should reach for.
+    /// </para>
+    /// </remarks>
+    public static void Substitute(Span<uint> pixels, RampSubstitution substitution)
+    {
+        var width = Vector<uint>.Count;
+
+        if (!Vector.IsHardwareAccelerated || pixels.Length < width)
+        {
+            SubstituteScalar(pixels, substitution);
+            return;
+        }
+
+        // Broadcast once, outside the loop: the table is five entries and never changes mid-pass.
+        var from = new Vector<uint>[substitution.Length];
+        var to = new Vector<uint>[substitution.Length];
+
+        for (var step = 0; step < substitution.Length; step++)
+        {
+            from[step] = new(substitution.From[step]);
+            to[step] = new(substitution.To[step]);
+        }
+
+        var index = 0;
+
+        for (; index <= pixels.Length - width; index += width)
+        {
+            var block = new Vector<uint>(pixels.Slice(index, width));
+            var result = block;
+
+            // Comparing against `block`, never `result`: the five source colours are distinct, so
+            // a lane can match at most one, and folding earlier writes back in would let a target
+            // colour that happens to equal a later source colour be substituted twice.
+            for (var step = 0; step < from.Length; step++)
+            {
+                result = Vector.ConditionalSelect(Vector.Equals(block, from[step]), to[step], result);
+            }
+
+            result.CopyTo(pixels.Slice(index, width));
+        }
+
+        SubstituteScalar(pixels[index..], substitution);
+    }
+
+    /// <summary>
+    /// The unvectorised substitution. Handles the tail of <see cref="Substitute"/>, and is the
+    /// reference the vector path is tested against.
+    /// </summary>
+    /// <remarks>
+    /// Public for the same reason <see cref="Substitute"/> is, and for no other — nothing in the
+    /// bake pipeline should call it directly.
+    /// </remarks>
+    public static void SubstituteScalar(Span<uint> pixels, RampSubstitution substitution)
+    {
+        var from = substitution.From.AsSpan();
+        var to = substitution.To.AsSpan();
+
+        for (var index = 0; index < pixels.Length; index++)
+        {
+            var pixel = pixels[index];
+
+            for (var step = 0; step < from.Length; step++)
+            {
+                if (pixel == from[step])
+                {
+                    pixels[index] = to[step];
+                    break;
+                }
+            }
+        }
     }
 
     /// <summary>

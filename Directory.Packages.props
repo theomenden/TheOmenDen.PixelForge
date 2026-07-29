@@ -72,6 +72,9 @@
     <PackageVersion Include="Meziantou.Framework.Globbing" Version="4.0.0" />
     <PackageVersion Include="Meziantou.Framework.FullPath" Version="3.0.1" />
     <PackageVersion Include="Meziantou.Framework.TemporaryDirectory" Version="3.0.1" />
+    <!-- Slugs the arbitrary text of a skin-ramp name into a filename segment. Latest stable
+         (the plan named 1.0.9); 2.0.0 ships a net10.0 target. -->
+    <PackageVersion Include="Meziantou.Framework.Slug" Version="2.0.0" />
     <PackageVersion Include="CsvHelper" Version="33.1.0" />
   </ItemGroup>
 
@@ -120,4 +123,17 @@
     <PackageVersion Include="xunit.v3" Version="3.2.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.5" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- Analyzers and annotations applied to every project automatically.
+         GlobalPackageReference implies PrivateAssets="all" and excludes runtime assets, which is
+         what an analyzer wants and is also right for JetBrains.Annotations here: nothing in this
+         repo is published as a package, so the attributes never need to flow to a consumer. -->
+    <GlobalPackageReference Include="Roslynator.Analyzers" Version="4.15.0" />
+    <GlobalPackageReference Include="Roslynator.Formatting.Analyzers" Version="4.15.0" />
+    <GlobalPackageReference Include="Roslynator.CodeFixes" Version="4.15.0" />
+    <GlobalPackageReference Include="Microsoft.VisualStudio.Threading.Analyzers" Version="18.7.23" />
+    <GlobalPackageReference Include="JetBrains.Annotations" Version="2026.2.0" />
+    <GlobalPackageReference Include="Meziantou.Analyzer" Version="3.0.136" />
+  </ItemGroup>
+
 </Project>

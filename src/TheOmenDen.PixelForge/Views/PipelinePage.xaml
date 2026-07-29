@@ -96,8 +96,8 @@
                     AutomationProperties.Name="Export mode"
                     SelectionChanged="OnExportModeChanged"
                     SelectionMode="Single">
-                    <controls:SegmentedItem Content="Layered" Icon="{ui:FontIcon Glyph=&#xE81E;}" />
-                    <controls:SegmentedItem Content="Flattened" Icon="{ui:FontIcon Glyph=&#xE7C4;}" />
+                    <controls:SegmentedItem Content="Curated" Icon="{ui:FontIcon Glyph=&#xE81E;}" />
+                    <controls:SegmentedItem Content="Full" Icon="{ui:FontIcon Glyph=&#xE7C4;}" />
                     <controls:SegmentedItem Content="Both" Icon="{ui:FontIcon Glyph=&#xE8C6;}" />
                 </controls:Segmented>
                 <TextBlock
@@ -109,103 +109,161 @@
             </StackPanel>
         </Grid>
 
-        <!--  Selection  -->
-        <Grid Grid.Row="3">
+        <!--  Selection — one expander per slot the catalogue can fill, plus the tone axis.  -->
+        <Grid
+            Grid.Row="3"
+            ColumnSpacing="16"
+            RowSpacing="8">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" MinWidth="200" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" MinWidth="200" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="260" />
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Bodies" />
-            <TextBlock
-                Grid.Column="2"
-                Style="{StaticResource BodyStrongTextBlockStyle}"
-                Text="Hair" />
+            <!--
+                The still the current selection composes to. Source and size are both set from
+                CompositePreview: the view model deals in recipes, never in image types.
+                Stretch="None" because PalettePreview already upscales nearest-neighbour, and
+                WinUI's Image has no interpolation-mode switch — letting it scale would blur the
+                pixel art it exists to show.
+            -->
+            <Image
+                x:Name="CompositePreviewImage"
+                HorizontalAlignment="Left"
+                AutomationProperties.AutomationId="CompositePreviewImage"
+                AutomationProperties.Name="Composite preview"
+                Stretch="None" />
 
             <!--
-                Equal starting widths, not the 300-360px sidebar the design rubric asks for:
-                bodies and hair are peer collections of comparable size, neither subordinate to
-                the other. The splitter makes the split adjustable anyway.
+                ItemsRepeater is a layout primitive: it has no scrolling of its own, so without
+                this ScrollViewer ten expanded slots clip silently rather than scroll. It is used
+                over ten hand-written expanders because the blocks differ only by which group they
+                bind to, and a repeated block is a block that drifts.
             -->
-            <controls:GridSplitter
+            <ScrollViewer
                 Grid.Row="1"
+                Padding="0,0,16,0"
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
+                <ItemsRepeater ElementPrepared="OnSlotElementPrepared" ItemsSource="{x:Bind ViewModel.Groups, Mode=OneWay}">
+                    <ItemsRepeater.Layout>
+                        <StackLayout Spacing="4" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SlotGroupViewModel">
+                            <!--
+                                No AutomationId here on purpose. SettingsExpander's own peer is a
+                                Group with no pattern; the element that expands is the header
+                                ToggleButton inside its template, so OnSlotElementPrepared stamps
+                                ExpanderAutomationId onto that instead. Setting it in both places
+                                would make the id match two elements and stop resolving at all.
+                            -->
+                            <controls:SettingsExpander
+                                Description="{x:Bind Description, Mode=OneWay}"
+                                Header="{x:Bind Header}"
+                                ItemsSource="{x:Bind Items}">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <!--
+                                        A TextBox rather than an AutoSuggestBox: AutoSuggestBox's
+                                        peer is a Group wrapping an unnamed Edit, so the id lands
+                                        on something with no ValuePattern and UIA set-value cannot
+                                        reach the filter at all. There are no suggestions to show
+                                        either — the list below is the result.
+                                        UpdateSourceTrigger is load-bearing: the default commits on
+                                        LostFocus, so set-value writes the text and nothing filters.
+                                    -->
+                                    <TextBox
+                                        Width="180"
+                                        AutomationProperties.AutomationId="{x:Bind local:PipelinePage.SlotAutomationId('SlotFilter', Slot)}"
+                                        AutomationProperties.Name="{x:Bind local:PipelinePage.SlotLabel('Filter', Header)}"
+                                        PlaceholderText="Filter"
+                                        Text="{x:Bind Filter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <ToggleSwitch
+                                        AutomationProperties.AutomationId="{x:Bind local:PipelinePage.SlotAutomationId('SlotVariants', Slot)}"
+                                        AutomationProperties.Name="{x:Bind local:PipelinePage.SlotLabel('Include colour variants for', Header)}"
+                                        IsOn="{x:Bind IncludeVariants, Mode=TwoWay}"
+                                        OffContent="Base only"
+                                        OnContent="All colours" />
+                                </StackPanel>
+                                <controls:SettingsExpander.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:PartialSelectionItem">
+                                        <controls:SettingsCard Description="{x:Bind Status, Mode=OneWay}" Header="{x:Bind Name}">
+                                            <CheckBox
+                                                AutomationProperties.AutomationId="{x:Bind AutomationId}"
+                                                AutomationProperties.Name="{x:Bind Name}"
+                                                IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
+                                        </controls:SettingsCard>
+                                    </DataTemplate>
+                                </controls:SettingsExpander.ItemTemplate>
+                            </controls:SettingsExpander>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+
+            <ScrollViewer
+                Grid.RowSpan="2"
                 Grid.Column="1"
-                Width="16"
-                AutomationProperties.AutomationId="SheetListSplitter"
-                AutomationProperties.Name="Resize sheet lists"
-                ResizeBehavior="BasedOnAlignment"
-                ResizeDirection="Auto">
-                <controls:GridSplitter.RenderTransform>
-                    <TranslateTransform X="-7" />
-                </controls:GridSplitter.RenderTransform>
-            </controls:GridSplitter>
-
-            <!--
-                SelectionMode="None" with explicit CheckBox rows: each row also carries a status
-                column and its own automation id, so the template is explicit regardless, and
-                ListView's own Multiple selection would be a second model competing with IsSelected.
-            -->
-            <ListView
-                Grid.Row="1"
-                AutomationProperties.AutomationId="BodySheetList"
-                AutomationProperties.Name="Body sheets"
-                ItemsSource="{x:Bind ViewModel.Bodies, Mode=OneWay}"
-                SelectionMode="None">
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="vm:SheetSelectionItem">
-                        <Grid Padding="0,4" ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <CheckBox
-                                AutomationProperties.AutomationId="{x:Bind AutomationId}"
-                                Content="{x:Bind Name}"
-                                IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
-                            <TextBlock
-                                Grid.Column="1"
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="{x:Bind Status, Mode=OneWay}" />
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-
-            <ListView
-                Grid.Row="1"
-                Grid.Column="2"
-                AutomationProperties.AutomationId="HairSheetList"
-                AutomationProperties.Name="Hair sheets"
-                ItemsSource="{x:Bind ViewModel.Hair, Mode=OneWay}"
-                SelectionMode="None">
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="vm:SheetSelectionItem">
-                        <Grid Padding="0,4" ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <CheckBox
-                                AutomationProperties.AutomationId="{x:Bind AutomationId}"
-                                Content="{x:Bind Name}"
-                                IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
-                            <TextBlock
-                                Grid.Column="1"
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="{x:Bind Status, Mode=OneWay}" />
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
+                HorizontalScrollBarVisibility="Disabled"
+                VerticalScrollBarVisibility="Auto">
+                <StackPanel Spacing="8">
+                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Skin tones" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Only combinations carrying skin are multiplied by this axis."
+                        TextWrapping="Wrap" />
+                    <!--
+                        UniformGrid is a panel, not an items control, so it arrives as the
+                        ItemsPanel. Equal cells are the point: the swatches line up in a column
+                        regardless of how long a ramp's name is.
+                    -->
+                    <ItemsControl
+                        AutomationProperties.AutomationId="ToneList"
+                        AutomationProperties.Name="Skin tones"
+                        ItemsSource="{x:Bind ViewModel.Tones, Mode=OneWay}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <controls:UniformGrid Columns="1" RowSpacing="4" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:ToneSelectionItem">
+                                <CheckBox
+                                    MinWidth="0"
+                                    AutomationProperties.AutomationId="{x:Bind local:PipelinePage.ToneAutomationId(Name)}"
+                                    AutomationProperties.Name="{x:Bind Name}"
+                                    IsChecked="{x:Bind IsSelected, Mode=TwoWay}">
+                                    <StackPanel
+                                        Orientation="Horizontal"
+                                        Spacing="8"
+                                        ToolTipService.ToolTip="{x:Bind Name}">
+                                        <!--
+                                            The fill is the ramp's own colour — data, not theming.
+                                            The outline is theming, and it is what keeps a swatch
+                                            that lands near the page background visible in both.
+                                        -->
+                                        <Border
+                                            Width="16"
+                                            Height="16"
+                                            Background="{x:Bind local:PipelinePage.ToneBrush(Ramp)}"
+                                            BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="{ThemeResource ControlCornerRadius}" />
+                                        <TextBlock
+                                            Style="{StaticResource CaptionTextBlockStyle}"
+                                            Text="{x:Bind Name}"
+                                            TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </ScrollViewer>
         </Grid>
 
         <!--  Run  -->
@@ -244,6 +302,11 @@
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="{x:Bind local:PipelinePage.PlannedLabel(ViewModel.PlannedCount), Mode=OneWay}" />
+                <Button
+                    AutomationProperties.AutomationId="BtnLoadRoostSelection"
+                    AutomationProperties.Name="Load the spec-079 selection"
+                    Command="{x:Bind ViewModel.LoadRoostSelectionCommand}"
+                    Content="Roost set (079)" />
                 <Button
                     AutomationProperties.AutomationId="BtnExport"
                     Command="{x:Bind ViewModel.ExportCommand}"

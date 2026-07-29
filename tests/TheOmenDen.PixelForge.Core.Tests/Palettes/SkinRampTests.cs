@@ -51,32 +51,10 @@ public sealed class SkinRampTests
     public void BaseTone_MatchesTheSpecifiedHex(int index, byte r, byte g, byte b)
         => Assert.Equal(new SKColor(r, g, b), SkinRamps.All[index].BaseTone);
 
-    [Fact]
-    public void SubstitutionFrom_IsIdentity_WhenTargetIsTheSourceRamp()
-    {
-        var substitution = SkinRamps.Source.SubstitutionFrom(SkinRamps.Source);
-
-        foreach (var step in SkinRamps.Source.Steps)
-        {
-            Assert.Equal(step, substitution[SkinRamp.Pack(step)]);
-        }
-    }
-
-    [Fact]
-    public void SubstitutionFrom_MapsEachStepToTheSameIndex()
-    {
-        var target = SkinRamps.All[3];
-        var substitution = target.SubstitutionFrom(SkinRamps.Source);
-
-        Assert.Equal(SkinRamps.StepCount, substitution.Count);
-
-        for (var i = 0; i < SkinRamps.StepCount; i++)
-        {
-            var key = SkinRamp.Pack(SkinRamps.Source.Steps[i]);
-
-            Assert.Equal(target.Steps[i], substitution[key]);
-        }
-    }
+    // The two LegacySubstitutionFrom_* tests that stood here went with the member they named,
+    // rather than being rewritten: RampSubstitutionTests already asserts both properties against
+    // the surviving API, index alignment in SubstitutionFrom_PairsEveryStepInOrder and the
+    // no-op case in IsIdentity_IsTrueOnlyWhenSourceAndTargetMatch.
 
     /// <summary>
     /// A recolour must be reversible index-for-index, which only holds if no two steps in a

@@ -1,37 +1,97 @@
 using System.Collections.Immutable;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using DotNext;
 using Meziantou.Framework;
 using TheOmenDen.PixelForge.Core.Baking;
+using TheOmenDen.PixelForge.Core.Catalog;
+using TheOmenDen.PixelForge.Core.Palettes;
 using TheOmenDen.PixelForge.Core.Spritesheets;
 using TheOmenDen.PixelForge.Services;
 
 namespace TheOmenDen.PixelForge.ViewModels;
 
 /// <summary>
-/// Selects sheets, runs the batch, and reports each result as it lands.
+/// Picks partials slot by slot, plans the cross product they describe, runs it, and reports each
+/// sheet as it lands.
 /// </summary>
+/// <remarks>
+/// The selection model is the catalogue, not a fixed table of recipes: what gets baked is
+/// <see cref="BatchPlan.Expand"/>'s expansion of one <see cref="SlotSelection"/> per slot across
+/// the ticked tones.
+/// </remarks>
 public sealed partial class BatchExportViewModel : ObservableObject
 {
+    /// <summary>
+    /// Above this many files the run is announced rather than blocked. A four-figure batch is a
+    /// legitimate thing to ask for; silently starting one is not.
+    /// </summary>
+    private const int WarnThreshold = 1000;
+
+    private const ExportMode DefaultMode = ExportMode.Curated;
+
+    private const string CuratedDescription =
+        "The 240x1152 contract sheet: eight clips on three facings, north dropped. This is the geometry Corvus consumes.";
+
+    private const string FullDescription =
+        "The raw 1104x192 assembly: every source column on all four facings, keeping the north facing and the draws the contract sheet drops.";
+
+    private const string BothDescription =
+        "Both geometries, one file each per combination — twice the files, with index.csv and clips.csv beside them.";
+
     private readonly SourcePackService _packs;
+    private readonly CatalogService _catalog;
     private readonly PickerService _picker;
     private bool _reloadPending;
 
-    public BatchExportViewModel(SourcePackService packs, PickerService picker)
+    /// <summary>Wires the page to the services that decide what can be baked.</summary>
+    /// <param name="packs">Whether the three pack roots resolve at all.</param>
+    /// <param name="catalog">The scanned partials the picker lists.</param>
+    /// <param name="ramps">The tones on offer — the seven shipped ones plus the user's own.</param>
+    /// <param name="picker">The folder picker behind <c>Browse</c>.</param>
+    /// <remarks>
+    /// Only <see cref="CatalogService.Changed"/> is subscribed, not
+    /// <see cref="SourcePackService.Changed"/> too: the catalogue rescans on a path change and
+    /// raises its own event afterwards, so listening to both would reload twice and the first
+    /// reload would read a catalogue that had not caught up.
+    /// </remarks>
+    public BatchExportViewModel(
+        SourcePackService packs,
+        CatalogService catalog,
+        RampService ramps,
+        PickerService picker)
     {
         _packs = packs;
+        _catalog = catalog;
         _picker = picker;
 
-        _packs.Changed += (_, _) => Reload();
+        _catalog.Changed += (_, _) => Reload();
+
+        // Snapshotted once. A ramp added from the palette page afterwards needs a restart to
+        // appear here — the tone axis is a batch concern and does not warrant live shaping.
+        foreach (var ramp in ramps.Ramps)
+        {
+            var tone = new ToneSelectionItem(ramp)
+            {
+                IsSelected = string.Equals(ramp.Name, SkinRamps.Source.Name, StringComparison.OrdinalIgnoreCase),
+            };
+
+            tone.PropertyChanged += OnSelectionChanged;
+
+            Tones.Add(tone);
+        }
 
         Reload();
     }
 
-    public ObservableCollection<SheetSelectionItem> Bodies { get; } = [];
+    /// <summary>One picker per slot the catalogue can fill, in generator draw order.</summary>
+    public ObservableCollection<SlotGroupViewModel> Groups { get; } = [];
 
-    public ObservableCollection<SheetSelectionItem> Hair { get; } = [];
+    /// <summary>The tone axis. Only combinations that carry skin are multiplied by it.</summary>
+    public ObservableCollection<ToneSelectionItem> Tones { get; } = [];
 
     /// <summary>Index into the mode Segmented — no converter needed.</summary>
     public int SelectedModeIndex
@@ -49,6 +109,8 @@ public sealed partial class BatchExportViewModel : ObservableObject
             OnPropertyChanged();
             OnPropertyChanged(nameof(ModeDescription));
             OnPropertyChanged(nameof(PlannedCount));
+
+            ExportCommand.NotifyCanExecuteChanged();
         }
     }
 
@@ -59,98 +121,85 @@ public sealed partial class BatchExportViewModel : ObservableObject
     /// </summary>
     /// <remarks>
     /// An index outside the enum is the control clearing itself (-1) rather than a choice. An
-    /// unchecked cast would make that Both — 79 files — so the fallback is deliberately the
-    /// cheapest mode, not the largest.
+    /// unchecked cast would make that <see cref="ExportMode.Both"/> — twice the files — so the
+    /// fallback is deliberately the cheapest mode, not the largest.
     /// </remarks>
     public ExportMode Mode => Enum.IsDefined((ExportMode)SelectedModeIndex)
         ? (ExportMode)SelectedModeIndex
         : DefaultMode;
 
-    private const ExportMode DefaultMode = ExportMode.Layered;
-
-    /// <summary>
-    /// The tradeoff, stated where the choice is made. Layered keeps hair a separate texture so a
-    /// style can be swapped at runtime and the engine keeps control of z-order; flattened is one
-    /// texture per pair — fewer draw calls, but the hair is baked in.
-    /// </summary>
+    /// <summary>The tradeoff, stated where the choice is made.</summary>
     public string ModeDescription => Mode switch
     {
-        ExportMode.Flattened => FlattenedDescription,
+        ExportMode.Full => FullDescription,
         ExportMode.Both => BothDescription,
-        _ => LayeredDescription,
+        _ => CuratedDescription,
     };
 
-    private const string LayeredDescription =
-        "One file per sheet. Hair stays a separate texture, so a style can be swapped at runtime without rebaking.";
+    /// <summary>Where sheets and manifests are written.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    public partial string OutputFolder { get; private set; } = string.Empty;
 
-    private const string FlattenedDescription =
-        "Body and hair composited into one texture per pair. Fewer draw calls, but the hairstyle is baked in.";
-
-    private const string BothDescription =
-        "Both: layered sheets for runtime swapping, plus a flattened texture for every body and hair pair.";
-
-    public string OutputFolder
-    {
-        get => field;
-        private set
-        {
-            field = value;
-
-            OnPropertyChanged();
-
-            ExportCommand.NotifyCanExecuteChanged();
-        }
-    } = string.Empty;
-
+    /// <summary>Whether the three pack roots resolve; drives the page's warning bar.</summary>
     public bool PacksMissing => !_packs.Resolved.HasValue;
 
-    public bool IsExporting
-    {
-        get => field;
-        private set
-        {
-            field = value;
+    /// <summary>Whether a run is in flight.</summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    public partial bool IsExporting { get; private set; }
 
-            OnPropertyChanged();
+    /// <summary>Run progress as a percentage, for the bar.</summary>
+    [ObservableProperty]
+    public partial double ProgressValue { get; private set; }
 
-            ExportCommand.NotifyCanExecuteChanged();
-        }
-    }
-
-    public double ProgressValue
-    {
-        get => field;
-        private set
-        {
-            field = value;
-
-            OnPropertyChanged();
-        }
-    }
-
-    public string ProgressText
-    {
-        get => field;
-        private set
-        {
-            field = value;
-
-            OnPropertyChanged();
-        }
-    } = string.Empty;
+    /// <summary>Run progress as <c>completed / total</c>, for the caption beside the bar.</summary>
+    [ObservableProperty]
+    public partial string ProgressText { get; private set; } = string.Empty;
 
     /// <summary>
     /// Raised for anything worth telling the user. The page feeds these to a
-    /// <c>StackedNotificationsBehavior</c>, which queues them — a 79-sheet run can report several
+    /// <c>StackedNotificationsBehavior</c>, which queues them — one run can report several
     /// distinct failures, and a single string property would show only the last.
     /// </summary>
-    public event EventHandler<StatusNotice>? Notified;
+    public event EventHandler<StatusNoticeEventArgs>? Notified;
 
-    private void Notify(string message, StatusLevel level) =>
-        Notified?.Invoke(this, new StatusNotice(message, level));
+    /// <summary>
+    /// How many files the current selection, tones and mode would produce.
+    /// </summary>
+    /// <remarks>
+    /// <see langword="long"/> because <see cref="BatchPlan.Count"/> saturates rather than wrapping:
+    /// ten slots of a 995-file library pass <see langword="int"/> easily, and a label reading a
+    /// negative number is worse than one reading an implausible one.
+    /// </remarks>
+    public long PlannedCount
+    {
+        get
+        {
+            var planned = BatchPlan.Count(Selections(), SelectedTones());
 
-    /// <summary>How many files the current selection and mode would produce.</summary>
-    public int PlannedCount => Plan().Length;
+            if (Mode is not ExportMode.Both)
+            {
+                return planned;
+            }
+
+            // Both writes every combination in both geometries. Saturating rather than doubling
+            // blindly, or the widest selections would come back negative.
+            return planned > long.MaxValue / 2 ? long.MaxValue : planned * 2;
+        }
+    }
+
+    /// <summary>
+    /// The one recipe the page's composite still stands for, or none while the selection plans
+    /// nothing.
+    /// </summary>
+    /// <remarks>
+    /// A property rather than an event payload: the view rebuilds the still off
+    /// <see cref="PlannedCount"/>'s change notification, which every axis already raises. It stops
+    /// at the recipe because a <c>Microsoft.UI</c> image type here would cost the view model its
+    /// testability — see <c>CompositePreview</c>, which does the rendering.
+    /// </remarks>
+    public Optional<SheetRecipe> PreviewRecipe => ExportPlan.Still(Selections(), SelectedTones());
 
     [RelayCommand]
     private async Task BrowseOutputAsync()
@@ -163,22 +212,64 @@ public sealed partial class BatchExportViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// Ticks the spec-079 art, so the shipped set can be inspected and varied from here.
+    /// </summary>
+    /// <remarks>
+    /// A preset, not the deliverable: the files Corvus consumes are named explicitly by
+    /// <see cref="RoostSheets.All"/>, and a stem generated from this selection would not match its
+    /// cosmetic registry.
+    /// </remarks>
+    [RelayCommand]
+    private void LoadRoostSelection()
+    {
+        if (!_catalog.Current.TryGet(out var catalog))
+        {
+            Notify("No asset catalogue yet. Set the three pack folders in Settings.", StatusLevel.Warning);
+
+            return;
+        }
+
+        var preset = RoostSheets.Selection(catalog);
+
+        foreach (var group in Groups)
+        {
+            group.Apply(ChoicesFor(preset, group.Slot));
+        }
+
+        foreach (var tone in Tones)
+        {
+            tone.IsSelected = true;
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanExport), IncludeCancelCommand = true)]
     private async Task ExportAsync(CancellationToken cancellationToken)
     {
-        var recipes = Plan();
+        var planned = ExportPlan.Recipes(Selections(), SelectedTones(), Mode);
 
-        if (recipes.IsDefaultOrEmpty)
+        if (!planned.TryGet(out var recipes))
         {
-            Notify("Nothing selected.", StatusLevel.Warning);
+            Notify(ExportPlan.Explain(planned.Error), StatusLevel.Warning);
+
             return;
         }
+
+        if (recipes.Length > WarnThreshold)
+        {
+            Notify($"{recipes.Length} files planned. This will take a while.", StatusLevel.Warning);
+        }
+
+        var output = FullPath.FromPath(OutputFolder);
 
         IsExporting = true;
         ProgressValue = 0;
         ProgressText = $"0 / {recipes.Length}";
 
-        ResetStatuses();
+        foreach (var group in Groups)
+        {
+            group.ClearStatuses();
+        }
 
         // Constructed on the UI thread, so Report marshals back to it. Every status write below
         // therefore happens on the dispatcher without any explicit queueing.
@@ -188,32 +279,13 @@ public sealed partial class BatchExportViewModel : ObservableObject
         {
             var summary = await BatchBaker.RunAsync(
                 recipes,
-                FullPath.FromPath(OutputFolder),
+                output,
                 progress,
                 Environment.ProcessorCount,
                 cancellationToken);
 
-            var index = SheetIndex.WriteTo(FullPath.FromPath(OutputFolder));
-
-            // Separate notices rather than one concatenated string — the behavior stacks them,
-            // so a failed manifest stays visible next to an otherwise successful run.
-            if (summary.Cancelled)
-            {
-                Notify(
-                    $"Cancelled. {summary.Succeeded} written, {summary.TotalWritten} total.",
-                    StatusLevel.Warning);
-            }
-            else
-            {
-                Notify(
-                    $"{summary.Succeeded} written, {summary.Failed} failed, {summary.TotalWritten} total.",
-                    summary.Failed is 0 ? StatusLevel.Success : StatusLevel.Warning);
-            }
-
-            if (!index.IsSuccessful)
-            {
-                Notify($"Manifest failed: {index.Error}.", StatusLevel.Error);
-            }
+            Report(summary);
+            WriteManifests(output, recipes);
         }
         finally
         {
@@ -226,8 +298,85 @@ public sealed partial class BatchExportViewModel : ObservableObject
         }
     }
 
-    private bool CanExport() => !IsExporting && !PacksMissing && !string.IsNullOrWhiteSpace(OutputFolder);
+    private bool CanExport() =>
+        !IsExporting
+        && !PacksMissing
+        && !string.IsNullOrWhiteSpace(OutputFolder)
+        && PlannedCount > 0;
 
+    private void Notify(string message, StatusLevel level) =>
+        Notified?.Invoke(this, new StatusNoticeEventArgs(message, level));
+
+    /// <summary>What every slot contributes, or nothing at all until the packs resolve.</summary>
+    private ImmutableArray<SlotSelection> Selections() =>
+        _catalog.Current.TryGet(out var catalog)
+            ? [.. Groups.AsValueEnumerable().Select(group => group.ToSelection(catalog))]
+            : [];
+
+    /// <summary>The ticked tones, in the order the page lists them.</summary>
+    /// <remarks>
+    /// <see cref="ObservableCollection{T}"/> is not one of the types the ZLinq drop-in generator
+    /// covers, so the chain is opened explicitly or it would quietly bind to System.Linq.
+    /// </remarks>
+    private ImmutableArray<SkinRamp> SelectedTones() =>
+    [
+        .. Tones.AsValueEnumerable()
+            .Where(static tone => tone.IsSelected)
+            .Select(static tone => tone.Ramp),
+    ];
+
+    /// <summary>A preset's choices for one slot, or none when the preset does not fill it.</summary>
+    private static ImmutableArray<Optional<AssetPartial>> ChoicesFor(
+        ImmutableArray<SlotSelection> preset,
+        AssetSlot slot) =>
+        preset.AsSpan().FirstOrDefault(selection => selection.Slot == slot)?.Choices ?? [];
+
+    private void Report(BatchSummary summary) => Notify(
+        summary.Cancelled
+            ? $"Cancelled. {summary.Succeeded} written, {summary.TotalWritten} total."
+            : $"{summary.Succeeded} written, {summary.Failed} failed, {summary.TotalWritten} total.",
+        summary.Cancelled || summary.Failed is not 0 ? StatusLevel.Warning : StatusLevel.Success);
+
+    /// <summary>
+    /// Writes the indexes the run's geometries need, plus the run manifest.
+    /// </summary>
+    /// <remarks>
+    /// Each geometry's index is written only when the run actually produced that geometry, so a
+    /// curated-only export does not leave a <c>clips.csv</c> describing files that are not there.
+    /// </remarks>
+    private void WriteManifests(FullPath output, ImmutableArray<SheetRecipe> recipes)
+    {
+        if (recipes.AsSpan().Any(static recipe => recipe.Geometry is SheetGeometry.Curated))
+        {
+            NotifyIfFailed(SheetIndex.FileName, SheetIndex.WriteTo(output));
+        }
+
+        if (recipes.AsSpan().Any(static recipe => recipe.Geometry is SheetGeometry.Full))
+        {
+            NotifyIfFailed(ClipIndex.FileName, ClipIndex.WriteTo(output));
+        }
+
+        NotifyIfFailed(
+            BatchManifest.FileName,
+            BatchManifest.WriteTo(output, BatchManifest.NewRunId(), BatchManifest.RowsFor(recipes)));
+    }
+
+    private void NotifyIfFailed(string file, Result<int, BakeFailure> written)
+    {
+        if (!written.IsSuccessful)
+        {
+            Notify($"{file} failed: {written.Error}.", StatusLevel.Error);
+        }
+    }
+
+    /// <summary>
+    /// Marks every row the finished sheet was composed from.
+    /// </summary>
+    /// <remarks>
+    /// A stem now names every slot, so the old "row name is a prefix of the sheet name" heuristic
+    /// is gone: the stem is split on <c>_</c> and matched whole, or <c>top1</c> would mark
+    /// <c>top11</c> too.
+    /// </remarks>
     private void OnBakeProgress(BakeProgress report)
     {
         ProgressValue = report.Total is 0 ? 0 : report.Completed * 100.0 / report.Total;
@@ -237,96 +386,47 @@ public sealed partial class BatchExportViewModel : ObservableObject
             ? report.Written.TryGet(out var size) ? size.ToString(null, CultureInfo.CurrentCulture) : "written"
             : report.Failure.ToString();
 
-        // A flattened sheet's name is "body-NN_hair-NN", so a body row matches its own prefix.
-        Mark(Bodies, report.Name, status, report.IsSuccess);
-        Mark(Hair, report.Name, status, report.IsSuccess);
-    }
+        var segments = report.Name.Split('_');
 
-    private static void Mark(ObservableCollection<SheetSelectionItem> items, string name, string status, bool isSuccess)
-    {
-        foreach (var item in items)
+        foreach (var group in Groups)
         {
-            if (name == item.Name || name.StartsWith(item.Name + "_", StringComparison.Ordinal) || name.EndsWith("_" + item.Name, StringComparison.Ordinal))
-            {
-                // Sticky failures: a flattened body/hair row is written by up to nine pairs, so a
-                // later success must not paper over an earlier failure on the same row.
-                if (!isSuccess || item.Status.Length is 0)
-                {
-                    item.Status = status;
-                }
-            }
+            group.Mark(segments, status, report.IsSuccess);
         }
-    }
-
-    private void ResetStatuses()
-    {
-        foreach (var item in Bodies)
-        {
-            item.Status = string.Empty;
-        }
-
-        foreach (var item in Hair)
-        {
-            item.Status = string.Empty;
-        }
-    }
-
-    /// <summary>The recipes the current selection and mode imply.</summary>
-    private ImmutableArray<SheetRecipe> Plan()
-    {
-        var bodies = Selected(Bodies);
-        var hair = Selected(Hair);
-
-        return Mode switch
-        {
-            ExportMode.Layered => [.. bodies, .. hair],
-            ExportMode.Flattened => RoostSheets.Flattened(bodies, hair),
-            _ => [.. bodies, .. hair, .. RoostSheets.Flattened(bodies, hair)],
-        };
-    }
-
-    private static ImmutableArray<SheetRecipe> Selected(ObservableCollection<SheetSelectionItem> items)
-    {
-        var chosen = ImmutableArray.CreateBuilder<SheetRecipe>(items.Count);
-
-        foreach (var item in items)
-        {
-            if (item.IsSelected)
-            {
-                chosen.Add(item.Recipe);
-            }
-        }
-
-        return chosen.ToImmutable();
     }
 
     private void Reload()
     {
         // A run survives navigation, so the user can walk off and re-pick a pack path mid-export.
-        // Rebuilding the grid under an in-flight run would orphan every Mark() the run still owes
-        // and silently reset the selection; the run itself still completes against its snapshot.
-        // Deferred, not dropped: ExportAsync's finally replays this once the run ends.
+        // Rebuilding the groups under an in-flight run would orphan every Mark() the run still
+        // owes and silently reset the selection; the run itself still completes against its
+        // snapshot. Deferred, not dropped: ExportAsync's finally replays this once the run ends.
         if (IsExporting)
         {
             _reloadPending = true;
+
             return;
         }
 
         _reloadPending = false;
 
-        Bodies.Clear();
-        Hair.Clear();
+        Groups.Clear();
 
-        if (_packs.Resolved.TryGet(out var packs))
+        if (_catalog.Current.TryGet(out var catalog))
         {
-            foreach (var recipe in RoostSheets.Bodies(packs))
+            foreach (var slot in AssetSlots.DrawOrder)
             {
-                Bodies.Add(Track(new SheetSelectionItem(recipe)));
-            }
+                var bases = catalog.Bases(slot);
 
-            foreach (var recipe in RoostSheets.Hair(packs))
-            {
-                Hair.Add(Track(new SheetSelectionItem(recipe)));
+                // A slot no pack ships gets no picker at all rather than an empty one — only the
+                // core pack ships a shadow, and expansion 2 has no front extra.
+                if (!bases.IsEmpty)
+                {
+                    var group = new SlotGroupViewModel(slot, bases);
+
+                    group.PropertyChanged += OnSelectionChanged;
+
+                    Groups.Add(group);
+                }
             }
         }
 
@@ -336,17 +436,21 @@ public sealed partial class BatchExportViewModel : ObservableObject
         ExportCommand.NotifyCanExecuteChanged();
     }
 
-    /// <summary>Selection drives the planned count, so each item's changes are watched.</summary>
-    private SheetSelectionItem Track(SheetSelectionItem item)
+    /// <summary>
+    /// The planned count is a live label, so anything that moves an axis has to re-raise it.
+    /// Filter text and captions are explicitly not such a change.
+    /// </summary>
+    private void OnSelectionChanged(object? sender, PropertyChangedEventArgs e)
     {
-        item.PropertyChanged += (_, e) =>
+        if (e.PropertyName is not (nameof(SlotGroupViewModel.SelectedCount)
+            or nameof(SlotGroupViewModel.IncludeVariants)
+            or nameof(ToneSelectionItem.IsSelected)))
         {
-            if (e.PropertyName is nameof(SheetSelectionItem.IsSelected))
-            {
-                OnPropertyChanged(nameof(PlannedCount));
-            }
-        };
+            return;
+        }
 
-        return item;
+        OnPropertyChanged(nameof(PlannedCount));
+
+        ExportCommand.NotifyCanExecuteChanged();
     }
 }

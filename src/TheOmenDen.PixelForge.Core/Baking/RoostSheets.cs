@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using CommunityToolkit.Diagnostics;
-using Meziantou.Framework;
+using DotNext;
+using TheOmenDen.PixelForge.Core.Catalog;
 using TheOmenDen.PixelForge.Core.Palettes;
 
 namespace TheOmenDen.PixelForge.Core.Baking;
@@ -18,9 +19,11 @@ public static class RoostSheets
     /// Bottom, top, head — generator draw orders 3, 4 and 5. Shadow (0) is deliberately
     /// omitted: it is optional in the generator and the overlay composes its own stack.
     /// <para>
-    /// Both garment partials carry zero skin-ramp pixels, so the recolour can only ever reach
-    /// the face. That is what makes a blind five-colour substitution safe here — see the
-    /// collision cases in <c>hair1</c> and <c>hat4</c>, which use ramp colours as hair and trim.
+    /// The middle element is the slot's folder name in every pack, which is also how the enum
+    /// member spells itself — see <see cref="AssetSlots.FolderName"/>. It is parsed back into an
+    /// <see cref="AssetSlot"/> so the <see cref="AssetLayer.IsSkin"/> flag comes from
+    /// <see cref="AssetSlots.IsSkinBearing"/> rather than being restated here, where it could
+    /// drift.
     /// </para>
     /// </summary>
     private static ImmutableArray<(ElementsPack Pack, string Slot, string File)> BodyLayers { get; } =
@@ -29,6 +32,18 @@ public static class RoostSheets
         (ElementsPack.Core, "top", "top11.png"),
         (ElementsPack.Core, "head", "head1.png"),
     ];
+
+    /// <summary>
+    /// Turns one of <see cref="BodyLayers"/>' folder names back into the slot it names.
+    /// </summary>
+    /// <param name="folder">A slot folder name such as <c>top</c>.</param>
+    /// <returns>The matching <see cref="AssetSlot"/>.</returns>
+    /// <remarks>
+    /// Parsed rather than mapped: <see cref="AssetSlots.FolderName"/> is the member name
+    /// lowercased, so a case-insensitive <see cref="Enum.Parse{TEnum}(string, bool)"/> is its
+    /// exact inverse and cannot fall out of step with the enum.
+    /// </remarks>
+    private static AssetSlot ToSlot(string folder) => Enum.Parse<AssetSlot>(folder, ignoreCase: true);
 
     /// <summary>Three masc, three femme, three neutral — chosen for distinct 48px silhouettes.</summary>
     private static ImmutableArray<(ElementsPack Pack, string File)> HairPicks { get; } =
@@ -44,15 +59,20 @@ public static class RoostSheets
         (ElementsPack.CharacterExpansion1, "hair16.png"),  // neutral — short bob
     ];
 
+    /// <summary>One body sheet per skin ramp, all sharing the same three partials.</summary>
+    /// <param name="packs">Where the source packs live. Never <see langword="null"/>.</param>
+    /// <returns>
+    /// One recipe per entry in <see cref="SkinRamps.All"/>, named <c>body-01</c> upwards.
+    /// </returns>
     public static ImmutableArray<SheetRecipe> Bodies(SourcePacks packs)
     {
         Guard.IsNotNull(packs);
 
-        var layers = ImmutableArray.CreateBuilder<FullPath>(BodyLayers.Length);
+        var layers = ImmutableArray.CreateBuilder<AssetLayer>(BodyLayers.Length);
 
         foreach (var (pack, slot, file) in BodyLayers)
         {
-            layers.Add(packs.Partial(pack, slot, file));
+            layers.Add(new(packs.Partial(pack, slot, file), AssetSlots.IsSkinBearing(ToSlot(slot))));
         }
 
         var resolved = layers.ToImmutable();
@@ -64,7 +84,7 @@ public static class RoostSheets
             {
                 Name = $"body-{i + 1:00}",
                 Layers = resolved,
-                Recolor = SkinRamps.All[i],
+                Tone = SkinRamps.All[i],
             });
         }
 
@@ -73,9 +93,15 @@ public static class RoostSheets
 
     /// <summary>
     /// Hair bakes as its own sheet with no body under it — it is a true stacked layer in the
-    /// overlay, sharing the body's grid so one frame map describes both. Never recoloured:
-    /// a hairstyle keeps its authored colour, and some of them legitimately use skin-ramp hexes.
+    /// overlay, sharing the body's grid so one frame map describes both.
     /// </summary>
+    /// <param name="packs">Where the source packs live. Never <see langword="null"/>.</param>
+    /// <returns>One recipe per entry in <see cref="HairPicks"/>, named <c>hair-01</c> upwards.</returns>
+    /// <remarks>
+    /// Every layer is <see cref="AssetLayer.IsSkin"/> <see langword="false"/>, matching
+    /// <see cref="AssetSlots.IsSkinBearing"/> for <see cref="AssetSlot.Hair"/>: a hairstyle keeps
+    /// its authored colour, and some of them legitimately use skin-ramp hexes as highlights.
+    /// </remarks>
     public static ImmutableArray<SheetRecipe> Hair(SourcePacks packs)
     {
         Guard.IsNotNull(packs);
@@ -89,7 +115,7 @@ public static class RoostSheets
             recipes.Add(new()
             {
                 Name = $"hair-{i + 1:00}",
-                Layers = [packs.Partial(pack, "hair", file)],
+                Layers = [new(packs.Partial(pack, "hair", file), AssetSlots.IsSkinBearing(AssetSlot.Hair))],
             });
         }
 
@@ -97,45 +123,86 @@ public static class RoostSheets
     }
 
     /// <summary>Every sheet the spec ships, bodies first.</summary>
+    /// <param name="packs">Where the source packs live. Never <see langword="null"/>.</param>
+    /// <returns><see cref="Bodies"/> followed by <see cref="Hair"/>.</returns>
     public static ImmutableArray<SheetRecipe> All(SourcePacks packs) =>
         [.. Bodies(packs), .. Hair(packs)];
 
     /// <summary>
-    /// The cross product of bodies and hair, composited into one sheet each.
-    /// <para>
-    /// Hair goes in <see cref="SheetRecipe.Overlays"/>, not <see cref="SheetRecipe.Layers"/>,
-    /// so it is drawn after the body's recolour and keeps its authored colour — see the
-    /// collision cases named on <see cref="BodyLayers"/>.
-    /// </para>
-    /// <para>
-    /// Flattening trades runtime flexibility for draw calls: a flattened pair is one texture,
-    /// but the hairstyle can no longer be swapped without rebaking. The layered sheets from
-    /// <see cref="All"/> remain the Corvus contract.
-    /// </para>
+    /// The spec-079 art as a picker selection, so the shipped set can be loaded, inspected and
+    /// varied from the batch page.
     /// </summary>
-    public static ImmutableArray<SheetRecipe> Flattened(
-        IReadOnlyList<SheetRecipe> bodies,
-        IReadOnlyList<SheetRecipe> hair)
+    /// <param name="catalog">The scanned packs to resolve the picks against.</param>
+    /// <returns>
+    /// One <see cref="SlotSelection"/> per filled slot. Partials the catalogue does not hold are
+    /// dropped rather than faulted — a pack pointed somewhere wrong should show an obviously short
+    /// selection, not an error dialog — and a slot left with nothing at all is omitted rather than
+    /// returned empty, since <see cref="BatchPlan"/> would drop it anyway.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// This is a convenience for exploration. The files Corvus consumes come from
+    /// <see cref="All"/>, which names them explicitly; a stem generated by
+    /// <see cref="BatchPlan.StemFor"/> would not match the registry.
+    /// </para>
+    /// <para>
+    /// No choice is <see cref="Optional{T}.None"/>. Offering <c>(none)</c> on the required trio is
+    /// <see cref="PlanFailure.RequiredSlotEmpty"/>, so a preset that did would be rejected the
+    /// moment it was loaded.
+    /// </para>
+    /// </remarks>
+    public static ImmutableArray<SlotSelection> Selection(AssetCatalog catalog)
     {
-        Guard.IsNotNull(bodies);
-        Guard.IsNotNull(hair);
+        Guard.IsNotNull(catalog);
 
-        var recipes = ImmutableArray.CreateBuilder<SheetRecipe>(bodies.Count * hair.Count);
+        var selections = new List<SlotSelection>(BodyLayers.Length + 1);
 
-        foreach (var body in bodies)
+        foreach (var (_, slot, file) in BodyLayers)
         {
-            foreach (var style in hair)
+            Pick(selections, catalog, ToSlot(slot), [Path.GetFileNameWithoutExtension(file)]);
+        }
+
+        Pick(
+            selections,
+            catalog,
+            AssetSlot.Hair,
+            [.. HairPicks.AsSpan().Select(static pick => Path.GetFileNameWithoutExtension(pick.File))]);
+
+        return [.. selections];
+    }
+
+    /// <summary>
+    /// Appends one slot's selection, keeping only the bases <paramref name="catalog"/> actually
+    /// holds and skipping the slot entirely when that leaves nothing.
+    /// </summary>
+    /// <remarks>
+    /// Every pick is a base file, so the variant is always <c>0</c> — the picker's per-slot
+    /// variants toggle is what expands one into its <c>_cN</c> siblings, and the spec ships the
+    /// authored colours.
+    /// </remarks>
+    private static void Pick(
+        List<SlotSelection> selections,
+        AssetCatalog catalog,
+        AssetSlot slot,
+        ReadOnlySpan<string> bases)
+    {
+        var choices = ImmutableArray.CreateBuilder<Optional<AssetPartial>>(bases.Length);
+
+        foreach (var name in bases)
+        {
+            if (catalog.Find(slot, name, variant: 0).TryGet(out var partial))
             {
-                recipes.Add(new()
-                {
-                    Name = $"{body.Name}_{style.Name}",
-                    Layers = body.Layers,
-                    Recolor = body.Recolor,
-                    Overlays = style.Layers,
-                });
+                choices.Add(partial);
             }
         }
 
-        return recipes.ToImmutable();
+        if (choices.Count is not 0)
+        {
+            selections.Add(new()
+            {
+                Slot = slot,
+                Choices = choices.ToImmutable(),
+            });
+        }
     }
 }

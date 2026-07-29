@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using SkiaSharp;
 using TheOmenDen.PixelForge.Core.Baking;
 using TheOmenDen.PixelForge.Core.Palettes;
@@ -46,7 +45,7 @@ public sealed class SheetBakerTests
         return result.Value;
     }
 
-    private static SKBitmap RecolorOrFail(SKBitmap source, FrozenDictionary<uint, SKColor> substitution)
+    private static SKBitmap RecolorOrFail(SKBitmap source, RampSubstitution substitution)
     {
         var result = SheetBaker.Recolor(source, substitution);
 

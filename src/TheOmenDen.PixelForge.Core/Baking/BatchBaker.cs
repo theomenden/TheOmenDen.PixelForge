@@ -8,7 +8,7 @@ namespace TheOmenDen.PixelForge.Core.Baking;
 /// <summary>
 /// Runs many recipes and writes each result to disk.
 /// <para>
-/// <c>Parallel.ForEachAsync</c> is what bounds this run. The work is synchronous and CPU-bound —
+/// <c>Parallel.ForAsync</c> is what bounds this run. The work is synchronous and CPU-bound —
 /// <see cref="RecipeBaker.Bake"/> decodes, composites and encodes on the calling thread — so the
 /// BCL's data-parallel primitive is the right shape: it partitions, schedules onto the thread
 /// pool, bounds by <c>MaxDegreeOfParallelism</c>, and threads cancellation through
@@ -21,12 +21,24 @@ namespace TheOmenDen.PixelForge.Core.Baking;
 /// genuinely async; feeding either one here would mean wrapping synchronous bakes in
 /// <c>Task.Run</c> for no gain. <c>TaskCompletionPipe&lt;T&gt;</c> is the one that would be wrong
 /// outright — it orders completions but never throttles starts, since the tasks handed to it
-/// are already running. A full run is 79 sheets, the 63 flattened ones each decoding four
-/// 828 KiB partials.
+/// are already running.
+/// </para>
+/// <para>
+/// Results are index-addressed: each worker writes only its own slot, so nothing about the
+/// outcomes needs synchronising and the summary is a plain fold once the run has stopped. The
+/// only shared state left is the progress position counter.
+/// </para>
+/// <para>
+/// That counter stays <see cref="Interlocked"/> because DotNext has nothing better for it.
+/// <c>DotNext.Threading.Atomic</c> supplies <c>AccumulateAndGet</c>, <c>UpdateAndGet</c>,
+/// <c>GetAndUpdate</c>, <c>GetOrSet</c>, <c>TrySet</c> and volatile <c>Read</c>/<c>Write</c> —
+/// the update-through-a-function cases the BCL handles poorly — but no <c>IncrementAndGet</c>.
+/// Writing <c>++</c> as <c>UpdateAndGet(ref x, static v =&gt; v + 1)</c> would be a compare-and-swap
+/// loop through a delegate, strictly worse than the intrinsic.
 /// </para>
 /// <para>
 /// A failed recipe is reported and the run continues. One missing partial must not cost the
-/// other 78 sheets.
+/// rest of the batch.
 /// </para>
 /// </summary>
 public static class BatchBaker
@@ -42,21 +54,20 @@ public static class BatchBaker
 
         if (recipes.IsDefaultOrEmpty)
         {
-            return new()
-            {
-                Succeeded = 0,
-                Failed = 0,
-                TotalWritten = ByteSize.FromBytes(0),
-                Cancelled = false,
-            };
+            // An empty run is an empty fold, so it needs no separate zero literal to drift.
+            return Summarize([], cancelled: false);
         }
 
         var total = recipes.Length;
-        var completed = 0;
-        var succeeded = 0;
-        var failed = 0;
-        var written = 0L;
         var cancelled = false;
+
+        // One slot per recipe, written only by the worker that owns that index, so the run needs
+        // no synchronisation over its results at all — the summary is a fold once everything has
+        // stopped. Null means "never ran", which is how a cancelled run stays countable.
+        var outcomes = new Result<ByteSize, BakeFailure>?[total];
+
+        // The one genuinely shared counter — see the type's remarks for why it stays Interlocked.
+        var completed = 0;
 
         var options = new ParallelOptions
         {
@@ -66,35 +77,21 @@ public static class BatchBaker
 
         try
         {
-            await Parallel.ForEachAsync(recipes, options, (recipe, token) =>
+            await Parallel.ForAsync(0, total, options, (index, token) =>
             {
                 token.ThrowIfCancellationRequested();
 
+                var recipe = recipes[index];
                 var outcome = BakeOne(recipe, outputDirectory);
 
-                // Interlocked rather than a lock: four independent counters, touched once per
-                // recipe. A lock here would serialise the reporting of work already done in
-                // parallel.
-                var position = Interlocked.Increment(ref completed);
-                var size = Optional<ByteSize>.None;
-
-                if (outcome.TryGet(out var actual))
-                {
-                    Interlocked.Increment(ref succeeded);
-                    Interlocked.Add(ref written, actual.Value);
-                    size = actual;
-                }
-                else
-                {
-                    Interlocked.Increment(ref failed);
-                }
+                outcomes[index] = outcome;
 
                 progress?.Report(new()
                 {
                     Name = recipe.Name,
-                    Written = size,
+                    Written = outcome.TryGet(out var size) ? size : Optional<ByteSize>.None,
                     Failure = outcome.Error,
-                    Completed = position,
+                    Completed = Interlocked.Increment(ref completed),
                     Total = total,
                 });
 
@@ -104,6 +101,37 @@ public static class BatchBaker
         catch (OperationCanceledException)
         {
             cancelled = true;
+        }
+
+        return Summarize(outcomes, cancelled);
+    }
+
+    /// <summary>
+    /// Folds the per-recipe outcomes into the run summary. Entries left <see langword="null"/> are
+    /// recipes a cancelled run never reached, and are counted as neither succeeded nor failed.
+    /// </summary>
+    private static BatchSummary Summarize(Result<ByteSize, BakeFailure>?[] outcomes, bool cancelled)
+    {
+        var succeeded = 0;
+        var failed = 0;
+        var written = 0L;
+
+        foreach (var outcome in outcomes)
+        {
+            if (outcome is not { } settled)
+            {
+                continue;
+            }
+
+            if (settled.TryGet(out var size))
+            {
+                succeeded++;
+                written += size.Value;
+            }
+            else
+            {
+                failed++;
+            }
         }
 
         return new()

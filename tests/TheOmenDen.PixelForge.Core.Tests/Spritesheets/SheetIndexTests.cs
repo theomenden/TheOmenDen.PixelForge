@@ -30,7 +30,8 @@ public sealed class SheetIndexTests : IDisposable
                 var expectedRow = SheetLayout.RowFor(clipIndex, facing);
 
                 var row = SheetIndex.Rows.AsSpan()
-                    .First(r => r.Clip == clip.Name && r.Facing == SheetIndex.Facings[facing]);
+                    .First(r => string.Equals(r.Clip, clip.Name, StringComparison.Ordinal)
+                        && string.Equals(r.Facing, SheetIndex.Facings[facing], StringComparison.Ordinal));
 
                 Assert.Equal(expectedRow, row.Row);
                 Assert.Equal(clip.FrameCount, row.FrameCount);
@@ -44,7 +45,7 @@ public sealed class SheetIndexTests : IDisposable
     public void Facings_AreSouthWestEast_AndNeverNorth()
     {
         Assert.Equal<string[]>(["south", "west", "east"], [.. SheetIndex.Facings]);
-        Assert.DoesNotContain("north", SheetIndex.Facings);
+        Assert.DoesNotContain("north", SheetIndex.Facings, StringComparer.Ordinal);
     }
 
     [Fact]

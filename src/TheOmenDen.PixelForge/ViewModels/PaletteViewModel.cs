@@ -72,7 +72,7 @@ public sealed partial class PaletteViewModel : ObservableObject
         get => field;
         set
         {
-            if (field == value)
+            if (string.Equals(field, value, StringComparison.Ordinal))
             {
                 return;
             }
@@ -138,10 +138,10 @@ public sealed partial class PaletteViewModel : ObservableObject
     /// <c>StackedNotificationsBehavior</c>, which queues and auto-dismisses them — so a run that
     /// produces several messages shows all of them instead of clobbering one string.
     /// </summary>
-    public event EventHandler<StatusNotice>? Notified;
+    public event EventHandler<StatusNoticeEventArgs>? Notified;
 
     private void Notify(string message, StatusLevel level) =>
-        Notified?.Invoke(this, new StatusNotice(message, level));
+        Notified?.Invoke(this, new StatusNoticeEventArgs(message, level));
 
     [RelayCommand]
     private void NewRamp()
