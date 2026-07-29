@@ -19,19 +19,14 @@ namespace TheOmenDen.PixelForge.Views;
 /// </summary>
 public sealed partial class PalettePage : Page
 {
+    /// <summary>Shown whenever there is nothing to render — no ramp, or no packs configured.</summary>
+    private const string NoPreviewHint = "Set the source pack folders in Settings to see a live preview.";
+
     private PalettePreview? _preview;
 
     public PalettePage()
     {
         InitializeComponent();
-
-        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
-        ViewModel.Notified += OnNotified;
-
-        // PaletteViewModel reads SourcePackService.Resolved fresh but never subscribes to its
-        // Changed event — it is a singleton, so if the packs are (re)configured while this page
-        // is alive, nothing would otherwise trigger a re-render.
-        App.Services.GetRequiredService<SourcePackService>().Changed += OnPacksChanged;
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -45,7 +40,7 @@ public sealed partial class PalettePage : Page
     /// a property path, and this SDK's XAML compiler crashes on the "current object" (".") form.
     /// </summary>
     public static Brush StepBrush(ImmutableArray<SKColor> steps, int index) =>
-        index >= steps.Length
+        steps.IsDefaultOrEmpty || index >= steps.Length
             ? new SolidColorBrush(Microsoft.UI.Colors.Transparent)
             : new SolidColorBrush(Windows.UI.Color.FromArgb(
                 steps[index].Alpha, steps[index].Red, steps[index].Green, steps[index].Blue));
@@ -68,9 +63,35 @@ public sealed partial class PalettePage : Page
             Duration = notice.Level is StatusLevel.Error ? null : TimeSpan.FromSeconds(4),
         });
 
-    private void OnLoaded(object sender, RoutedEventArgs e) => RenderPreview();
+    private void OnLoaded(object sender, RoutedEventArgs e)
+    {
+        // Loaded can re-fire on one instance (e.g. NavigationCacheMode.Enabled), so unsubscribe
+        // before subscribing rather than assuming this only ever runs once.
+        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
 
-    private void OnPacksChanged(object? sender, EventArgs e) => RenderPreview();
+        ViewModel.Notified -= OnNotified;
+        ViewModel.Notified += OnNotified;
+
+        // PaletteViewModel reads SourcePackService.Resolved fresh but never subscribes to its
+        // Changed event — it is a singleton, so if the packs are (re)configured while this page
+        // is alive, nothing would otherwise trigger a re-render.
+        var packs = App.Services.GetRequiredService<SourcePackService>();
+        packs.Changed -= OnPacksChanged;
+        packs.Changed += OnPacksChanged;
+
+        RenderPreview();
+    }
+
+    private void OnPacksChanged(object? sender, EventArgs e)
+    {
+        // The cached preview was baked from the old packs — reconfiguring means the cached
+        // sheet is now wrong, not just stale, so it must be rebuilt, not just re-rendered.
+        _preview?.Dispose();
+        _preview = null;
+
+        RenderPreview();
+    }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
@@ -100,6 +121,7 @@ public sealed partial class PalettePage : Page
     {
         if (ViewModel.PreviewRamp is not { } ramp)
         {
+            PreviewHint.Text = NoPreviewHint;
             ShowHint(visible: true);
             return;
         }
@@ -108,6 +130,7 @@ public sealed partial class PalettePage : Page
         {
             if (!ViewModel.PreviewRecipe.TryGet(out var recipe))
             {
+                PreviewHint.Text = NoPreviewHint;
                 ShowHint(visible: true);
                 return;
             }

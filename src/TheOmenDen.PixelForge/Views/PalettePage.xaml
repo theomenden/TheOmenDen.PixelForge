@@ -22,7 +22,6 @@
     <Grid Padding="24">
         <Grid.ColumnDefinitions>
             <ColumnDefinition
-                x:Name="RampColumn"
                 Width="320"
                 MinWidth="240"
                 MaxWidth="480" />
@@ -63,23 +62,33 @@
                                     Width="32"
                                     Height="16"
                                     Background="{x:Bind local:PalettePage.StepBrush(Steps, 0)}"
+                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
                                     CornerRadius="{StaticResource ControlCornerRadius}" />
                                 <Border
                                     Width="32"
                                     Height="16"
-                                    Background="{x:Bind local:PalettePage.StepBrush(Steps, 1)}" />
+                                    Background="{x:Bind local:PalettePage.StepBrush(Steps, 1)}"
+                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1" />
                                 <Border
                                     Width="32"
                                     Height="16"
-                                    Background="{x:Bind local:PalettePage.StepBrush(Steps, 2)}" />
+                                    Background="{x:Bind local:PalettePage.StepBrush(Steps, 2)}"
+                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1" />
                                 <Border
                                     Width="32"
                                     Height="16"
-                                    Background="{x:Bind local:PalettePage.StepBrush(Steps, 3)}" />
+                                    Background="{x:Bind local:PalettePage.StepBrush(Steps, 3)}"
+                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1" />
                                 <Border
                                     Width="32"
                                     Height="16"
                                     Background="{x:Bind local:PalettePage.StepBrush(Steps, 4)}"
+                                    BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
                                     CornerRadius="{StaticResource ControlCornerRadius}" />
                             </StackPanel>
                         </StackPanel>
@@ -154,7 +163,7 @@
                     clobber them down to one string. The behavior is the reason the view model
                     has no StatusMessage/HasStatus pair.
                 -->
-                <InfoBar x:Name="StatusBar" AutomationProperties.AutomationId="PaletteStatusBar">
+                <InfoBar AutomationProperties.AutomationId="PaletteStatusBar">
                     <interactivity:Interaction.Behaviors>
                         <behaviors:StackedNotificationsBehavior x:Name="StatusNotifications" />
                     </interactivity:Interaction.Behaviors>
@@ -171,7 +180,7 @@
 
                 <StackPanel Spacing="8">
                     <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Steps" />
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.Steps, Mode=OneWay}">
+                    <ItemsControl IsEnabled="{x:Bind ViewModel.IsEditable, Mode=OneWay}" ItemsSource="{x:Bind ViewModel.Steps, Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:RampStepViewModel">
                                 <Grid

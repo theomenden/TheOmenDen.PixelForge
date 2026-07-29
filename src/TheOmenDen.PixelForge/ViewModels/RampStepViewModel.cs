@@ -72,8 +72,10 @@ public sealed partial class RampStepViewModel(int index, SKColor color) : Observ
 
     /// <summary>
     /// Round-trips through the store's own parser, so what the editor accepts is exactly what a
-    /// saved file can contain. An unparseable value is ignored rather than throwing — the user is
-    /// mid-keystroke, not wrong.
+    /// saved file can contain. A parse failure is ignored outright — the box commits per
+    /// keystroke (<c>UpdateSourceTrigger=PropertyChanged</c>), so re-notifying here would erase
+    /// every character the user has not finished typing yet. <see cref="Color"/>'s setter already
+    /// re-notifies <see cref="Hex"/> once a full value parses.
     /// </summary>
     public string Hex
     {
@@ -83,11 +85,6 @@ public sealed partial class RampStepViewModel(int index, SKColor color) : Observ
             if (RampConversions.TryParseHex(value, out var parsed))
             {
                 Color = parsed;
-            }
-            else
-            {
-                // Push the canonical form back so the TextBox does not keep invalid text.
-                OnPropertyChanged();
             }
         }
     }
