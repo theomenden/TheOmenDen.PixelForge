@@ -32,6 +32,8 @@
     <PackageReference Include="Meziantou.Framework.Globbing" />
     <PackageReference Include="Meziantou.Framework.FullPath" />
     <PackageReference Include="Meziantou.Framework.TemporaryDirectory" />
+    <!-- Sanitises a ramp name into the tone segment of a baked sheet's stem. -->
+    <PackageReference Include="Meziantou.Framework.Slug" />
     <PackageReference Include="CsvHelper" />
   </ItemGroup>
 
