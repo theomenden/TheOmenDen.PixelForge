@@ -17,6 +17,7 @@ public sealed partial class BatchExportViewModel : ObservableObject
 {
     private readonly SourcePackService _packs;
     private readonly PickerService _picker;
+    private bool _reloadPending;
 
     public BatchExportViewModel(SourcePackService packs, PickerService picker)
     {
@@ -207,6 +208,11 @@ public sealed partial class BatchExportViewModel : ObservableObject
         finally
         {
             IsExporting = false;
+
+            if (_reloadPending)
+            {
+                Reload();
+            }
         }
     }
 
@@ -289,10 +295,14 @@ public sealed partial class BatchExportViewModel : ObservableObject
         // A run survives navigation, so the user can walk off and re-pick a pack path mid-export.
         // Rebuilding the grid under an in-flight run would orphan every Mark() the run still owes
         // and silently reset the selection; the run itself still completes against its snapshot.
+        // Deferred, not dropped: ExportAsync's finally replays this once the run ends.
         if (IsExporting)
         {
+            _reloadPending = true;
             return;
         }
+
+        _reloadPending = false;
 
         Bodies.Clear();
         Hair.Clear();
