@@ -58,10 +58,23 @@ public static class RunManifest
     public const string SchemaFileName = "pixelforge-manifest-v1.json";
 
     /// <summary>
-    /// Version of the manifest format, matching the schema's <c>schemaVersion</c> pattern. The
-    /// major component changes only when the shape breaks a consumer.
+    /// Version of the manifest format, read from the schema rather than restated here.
     /// </summary>
-    public const string SchemaVersion = "1.0.0";
+    /// <remarks>
+    /// <para>
+    /// The schema declares <c>schemaVersion</c> as a <c>const</c>, so this is the generated
+    /// constant behind it and there is no second literal to disagree with. That also upgrades what
+    /// validation buys: <c>EvaluateSchema()</c> now enforces the version's <em>value</em>, not just
+    /// its shape, so a writer that drifted would fail its own schema rather than emit a plausible
+    /// but wrong version.
+    /// </para>
+    /// <para>
+    /// The major component additionally appears in <see cref="SchemaFileName"/> and in the schema's
+    /// <c>$id</c>. Those three are held together by a test, because no compiler spans them.
+    /// </para>
+    /// </remarks>
+    public static string SchemaVersion { get; } =
+        (string)RunManifestDocument.SchemaVersionEntity.ConstInstance;
 
     /// <summary>
     /// The schema itself, read once from the assembly.
@@ -218,7 +231,12 @@ public static class RunManifest
         writer.WriteStartObject();
 
         writer.WriteString(RootNames.SchemaUtf8, SchemaFileName);
-        writer.WriteString(RootNames.SchemaVersionUtf8, SchemaVersion);
+
+        // The schema's own constant, written as the typed value rather than through a string, so
+        // the bytes on disk come from the contract itself.
+        writer.WritePropertyName(RootNames.SchemaVersionUtf8);
+        RunManifestDocument.SchemaVersionEntity.ConstInstance.WriteTo(writer);
+
         writer.WriteString(RootNames.RunIdUtf8, runId);
 
         WritePalette(writer, recipes);

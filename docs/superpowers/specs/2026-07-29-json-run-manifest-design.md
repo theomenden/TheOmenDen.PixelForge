@@ -134,6 +134,54 @@ in locals or projected with ZLinq. The verified path buys the same guarantee at 
 actually matters, which is the file, and it is the bargain `LosslessWebp.EncodeVerified` already
 strikes elsewhere in this pipeline.
 
+## Versioning
+
+*Added 2026-07-29, implementing `docs/superpowers/plans/2026-07-29-harden-manifest-contract.md`.*
+
+**The version is declared once, in the schema.** `schemaVersion` is a `const`, not a `pattern`, so the
+generated `SchemaVersionEntity.ConstInstance` is the only source and the writer emits that constant rather
+than a literal of its own. `EvaluateSchema()` therefore enforces the version's *value*, not just its shape —
+a drifted producer fails validation instead of shipping a plausible but wrong version.
+
+The **major** still appears in three hand-maintained places: the schema's `$id`, `RunManifest.SchemaFileName`,
+and `SchemaVersion`'s first component. `SchemaId_AgreesWithTheFileNameAndTheMajorVersion` is what holds them
+together; it derives the major from `SchemaVersion` rather than hard-coding `1`, so it cannot pass vacuously
+after a v2 bump.
+
+### Open for extension, closed where the keys are an enumeration
+
+`additionalProperties: false` was originally on **every** object, which made any additive change breaking:
+one new optional property produces a document that fails validation against an older copy of the schema.
+Adding a third geometry — the most likely future change — would have forced a v2. It is now applied by rule:
+
+> **Is an unknown key here more likely to be a newer version's data, or a typo?**
+
+| Closed — keys are a complete enumeration | Open for extension |
+|---|---|
+| `slots` — the ten `AssetSlot` layers | root, `palette`, `ramp` |
+| `curatedClip.rows` — the three curated facings | `layouts`, `curatedLayout`, `fullLayout` |
+| `fullLayout.facingRows` — the four source facings | `curatedClip`, `fullClip`, `sheet` |
+
+`ramp` is open: it could plausibly gain `baseTone`, which the schema already documents as index 3. `steps`
+keeps `minItems`/`maxItems: 5` regardless — that is a separate constraint.
+
+**Policy.** An optional property added at an open object is a **minor** bump. A change at a closed object, or
+a removed, retyped or newly-required property anywhere, mints a **new `$id`**, a new `-vN` filename and a new
+generated type. Consumers validate against the copy in the export folder, never a pinned one.
+
+### What relaxing cost, and what pays for it
+
+Opening those objects gave up a real producer-side check — but not the obvious one. A misspelled name was
+never the risk: every name the writer emits comes from a generated `JsonPropertyNames` constant, so `tonne`
+for `tone` cannot compile. What an open object no longer catches is a **correctly spelled property at the
+wrong nesting level** — `frameDurationMs` emitted onto a clip instead of its layout.
+
+`Write_EmitsExactlyTheExpectedProperties_AtRunLevel` / `_AtLayoutLevel` pin the exact property set at every
+open object and are the only thing catching that class of error. **Verified by committing it deliberately:**
+schema validation passed and only those tests failed. They must not be deleted as redundant with validation.
+
+Relaxing changed nothing in the generated code — same 194 files, no `AdditionalProperties` accessors appear.
+
 ## Files
 
 | File | Change |
@@ -179,7 +227,11 @@ Four, all of which cost a build cycle and are worth recording:
 ## Not done
 
 - **Corvus has not been updated to read this.** The manifest is written; nothing consumes it yet.
-- **`schemaVersion` is not enforced against the schema's own `$id`.** They are two literals that
-  must be bumped together when the shape breaks.
 - **The `$id` host does not serve the schema.** `https://schemas.corvusconnection.app/` is a stable
   identifier, not a live URL; the copy in the export directory is what consumers actually resolve.
+  Deliberately deferred — JSON Schema `$id` is an identifier rather than a locator, the manifest's
+  `$schema` already points at the sibling file, and that resolves offline. Publishing would buy
+  discoverability, not correctness, and it is infra rather than code in this repo.
+
+*Closed 2026-07-29:* `schemaVersion` no longer duplicates a C# literal, and the `$id`/filename/major
+coupling is now held by a test — see **Versioning** above.

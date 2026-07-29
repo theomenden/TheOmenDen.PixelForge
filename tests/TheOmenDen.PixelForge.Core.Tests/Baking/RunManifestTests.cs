@@ -6,6 +6,11 @@ using TheOmenDen.PixelForge.Core.Catalog;
 using TheOmenDen.PixelForge.Core.Palettes;
 using TheOmenDen.PixelForge.Core.Spritesheets;
 
+// Corvus.Text.Json is aliased rather than imported: it ships its own JsonElement, and importing the
+// namespace makes every System.Text.Json.JsonElement in this file ambiguous (CS0104).
+using ParsedManifest =
+    Corvus.Text.Json.ParsedJsonDocument<TheOmenDen.PixelForge.Core.Baking.RunManifestDocument>;
+
 namespace TheOmenDen.PixelForge.Core.Tests.Baking;
 
 /// <summary>
@@ -63,6 +68,54 @@ public sealed class RunManifestTests
 
     private static JsonElement Layouts(JsonDocument manifest) => manifest.RootElement.GetProperty("layouts");
 
+    /// <summary>
+    /// Asserts an object carries exactly <paramref name="expected"/> — no more, no fewer.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This exists because <c>additionalProperties: false</c> was deliberately lifted from every
+    /// object that can plausibly grow, so that adding an optional field — or a third geometry — is a
+    /// minor version bump rather than a break for consumers holding an older schema.
+    /// </para>
+    /// <para>
+    /// That trade costs the producer a real check, though not the obvious one. A misspelled name is
+    /// not the risk — every name the writer emits comes from a generated <c>JsonPropertyNames</c>
+    /// constant, so <c>tonne</c> for <c>tone</c> cannot compile. What an open object no longer
+    /// catches is a <em>correctly spelled</em> property written at the <em>wrong nesting level</em>:
+    /// <c>frameDurationMs</c> emitted onto a clip instead of its layout validates perfectly
+    /// cleanly. Verified by doing exactly that — schema validation passed and only this test failed.
+    /// </para>
+    /// <para>
+    /// So these assertions are the only thing standing between that mistake and a shipped manifest.
+    /// <b>Do not delete them as redundant with schema validation; validation can no longer see
+    /// this class of error at all.</b>
+    /// </para>
+    /// <para>
+    /// Reports the symmetric difference rather than a count, so a failure names the key.
+    /// </para>
+    /// </remarks>
+    private static void AssertExactProperties(JsonElement element, string where, params string[] expected)
+    {
+        var actual = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var property in element.EnumerateObject())
+        {
+            actual.Add(property.Name);
+        }
+
+        var wanted = new HashSet<string>(expected, StringComparer.Ordinal);
+
+        var unexpected = new HashSet<string>(actual, StringComparer.Ordinal);
+        unexpected.ExceptWith(wanted);
+
+        var missing = new HashSet<string>(wanted, StringComparer.Ordinal);
+        missing.ExceptWith(actual);
+
+        Assert.True(
+            unexpected.Count is 0 && missing.Count is 0,
+            $"{where} — unexpected: [{string.Join(", ", unexpected)}], missing: [{string.Join(", ", missing)}]");
+    }
+
     [Fact]
     public void Write_StampsTheRunIdAndSchemaVersion()
     {
@@ -80,6 +133,155 @@ public sealed class RunManifestTests
 
         // A relative $schema so an editor validates against the copy sitting beside it.
         Assert.Equal(RunManifest.SchemaFileName, manifest.RootElement.GetProperty("$schema").GetString());
+    }
+
+    /// <summary>
+    /// The version is a <c>const</c> in the schema, not a <c>pattern</c>, so validation enforces
+    /// its value rather than merely its shape.
+    /// </summary>
+    /// <remarks>
+    /// This is the only assertion that distinguishes the two. Every other test here would pass
+    /// equally well against a schema accepting any semver at all, so without this one the change
+    /// from <c>pattern</c> to <c>const</c> is untested — and a writer emitting <c>"2.0.0"</c>
+    /// against a v1 schema would ship looking perfectly well-formed.
+    /// </remarks>
+    [Fact]
+    public void EvaluateSchema_RejectsAManifestCarryingTheWrongVersion()
+    {
+        using var stream = new MemoryStream();
+
+        RunManifest.Write(stream, BatchManifest.NewRunId(), [Recipe("body-01")]);
+
+        var json = Encoding.UTF8.GetString(stream.ToArray());
+
+        // Sanity first, so a false below is about the version and nothing else.
+        using (var honest = ParsedManifest.Parse(json))
+        {
+            Assert.True(honest.RootElement.EvaluateSchema());
+        }
+
+        var tampered = json.Replace($"\"{RunManifest.SchemaVersion}\"", "\"9.9.9\"", StringComparison.Ordinal);
+
+        // Proves the substitution landed — otherwise this test would assert against an untouched
+        // document and pass for the wrong reason.
+        Assert.Contains("\"9.9.9\"", tampered, StringComparison.Ordinal);
+
+        using var parsed = ParsedManifest.Parse(tampered);
+
+        Assert.False(parsed.RootElement.EvaluateSchema());
+    }
+
+    /// <summary>
+    /// Pins the property set at every object the schema leaves open for extension — run level.
+    /// </summary>
+    /// <remarks>See <see cref="AssertExactProperties"/> for why this cannot be left to the schema.</remarks>
+    [Fact]
+    public void Write_EmitsExactlyTheExpectedProperties_AtRunLevel()
+    {
+        using var manifest = Manifest(
+            Recipe("body-01", tone: SkinRamps.All[1]),
+            Recipe("hair-01"));
+
+        var palette = manifest.RootElement.GetProperty("palette");
+        var sheets = manifest.RootElement.GetProperty("sheets");
+
+        AssertExactProperties(
+            manifest.RootElement,
+            "root",
+            "$schema", "schemaVersion", "runId", "palette", "layouts", "sheets");
+
+        AssertExactProperties(palette, "palette", "sourceRamp", "ramps");
+        AssertExactProperties(palette.GetProperty("sourceRamp"), "ramp", "name", "isHuman", "steps");
+
+        // tone is optional, so both shapes are pinned — a toned sheet and a bare one.
+        AssertExactProperties(sheets[0], "sheet (toned)", "name", "file", "geometry", "tone", "slots");
+        AssertExactProperties(sheets[1], "sheet (no tone)", "name", "file", "geometry", "slots");
+
+        AssertExactProperties(sheets[0].GetProperty("slots"), "slots", "bottom", "top", "head");
+    }
+
+    /// <summary>
+    /// Pins the property set at every object the schema leaves open for extension — layout level.
+    /// </summary>
+    /// <remarks>See <see cref="AssertExactProperties"/> for why this cannot be left to the schema.</remarks>
+    [Fact]
+    public void Write_EmitsExactlyTheExpectedProperties_AtLayoutLevel()
+    {
+        using var manifest = Manifest(Recipe("body-01"), Recipe("raw-01", SheetGeometry.Full));
+
+        var curated = Layouts(manifest).GetProperty("curated");
+        var full = Layouts(manifest).GetProperty("full");
+
+        AssertExactProperties(Layouts(manifest), "layouts", "curated", "full");
+
+        AssertExactProperties(
+            curated,
+            "curatedLayout",
+            "width", "height", "cellSize", "columns", "rows", "frameDurationMs", "facings", "clips");
+
+        AssertExactProperties(
+            curated.GetProperty("clips")[0],
+            "curatedClip",
+            "name", "frameCount", "sourceColumn", "rows");
+
+        AssertExactProperties(
+            curated.GetProperty("clips")[0].GetProperty("rows"),
+            "curatedClip.rows",
+            "south", "west", "east");
+
+        AssertExactProperties(
+            full,
+            "fullLayout",
+            "width", "height", "cellSize", "columns", "rows", "frameDurationMs", "facingRows", "clips");
+
+        AssertExactProperties(
+            full.GetProperty("facingRows"),
+            "fullLayout.facingRows",
+            "south", "west", "east", "north");
+
+        AssertExactProperties(
+            full.GetProperty("clips")[0],
+            "fullClip",
+            "name", "columns", "isRenderedByDefault", "reverseDrawOrder");
+    }
+
+    /// <summary>The version is declared once, in the schema, and read back out of it.</summary>
+    [Fact]
+    public void SchemaVersion_ComesFromTheSchemaItself()
+    {
+        Assert.Equal("1.0.0", RunManifest.SchemaVersion);
+        Assert.Contains(
+            $"\"const\": \"{RunManifest.SchemaVersion}\"",
+            RunManifest.SchemaText,
+            StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The schema's <c>$id</c>, <see cref="RunManifest.SchemaFileName"/> and the major component of
+    /// <see cref="RunManifest.SchemaVersion"/> all carry the major version, and all three are
+    /// maintained by hand. This is the only thing holding them together.
+    /// </summary>
+    /// <remarks>
+    /// The major is derived from <see cref="RunManifest.SchemaVersion"/> rather than written as
+    /// <c>1</c>, or the assertion would pass vacuously after a v2 bump and defeat its own purpose.
+    /// </remarks>
+    [Fact]
+    public void SchemaId_AgreesWithTheFileNameAndTheMajorVersion()
+    {
+        using var schema = JsonDocument.Parse(RunManifest.SchemaText);
+
+        var id = schema.RootElement.GetProperty("$id").GetString();
+
+        Assert.NotNull(id);
+
+        // The $id's last segment IS the file shipped beside the manifest.
+        var segment = id[(id.LastIndexOf('/') + 1)..];
+
+        Assert.Equal(RunManifest.SchemaFileName, segment);
+
+        var major = RunManifest.SchemaVersion.Split('.')[0];
+
+        Assert.EndsWith($"-v{major}.json", segment, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -2,10 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://schemas.corvusconnection.app/pixelforge-manifest-v1.json",
   "title": "PixelForge run manifest",
-  "description": "Describes one batch bake: the sheets written, the animation layout needed to read them, and the skin ramps they were recoloured into. This file is the shipped contract — consumers read it, PixelForge only writes it.",
+  "description": "Describes one batch bake: the sheets written, the animation layout needed to read them, and the skin ramps they were recoloured into. This file is the shipped contract — consumers read it, PixelForge only writes it. Validate against the copy of this schema that shipped in the SAME export folder, never a pinned or vendored one: most objects here deliberately permit additional properties so that a later minor version can add an optional field without breaking you, and a pinned copy gives up that protection for no gain, since the matching schema always travels with the artifacts. The three objects that do forbid extra properties (slots, curatedClip.rows, fullLayout.facingRows) each say why in their own description.",
   "type": "object",
   "required": ["$schema", "schemaVersion", "runId", "palette", "layouts", "sheets"],
-  "additionalProperties": false,
   "properties": {
     "$schema": {
       "type": "string",
@@ -13,8 +12,8 @@
     },
     "schemaVersion": {
       "type": "string",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
-      "description": "Semantic version of this manifest format. The major component changes only on a breaking change to the shape."
+      "const": "1.0.0",
+      "description": "Semantic version of this manifest format, and the single place it is declared — the writer emits this constant rather than a literal of its own, so a drifted producer fails validation instead of shipping a plausible but wrong version. Policy: an optional property added at one of the open objects below is a MINOR bump. A change to one of the three closed objects (slots, curatedClip.rows, fullLayout.facingRows), or a removed, retyped or newly required property anywhere, mints a new $id, a new -vN filename and a new generated type."
     },
     "runId": {
       "type": "string",
@@ -42,7 +41,6 @@
     "ramp": {
       "type": "object",
       "required": ["name", "isHuman", "steps"],
-      "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
@@ -65,7 +63,6 @@
     "palette": {
       "type": "object",
       "required": ["sourceRamp", "ramps"],
-      "additionalProperties": false,
       "description": "The colours behind the run. A recolour is a straight index-for-index substitution of five colours — no blending, no dithering, no colour-space maths.",
       "properties": {
         "sourceRamp": {
@@ -82,7 +79,6 @@
     "curatedClip": {
       "type": "object",
       "required": ["name", "frameCount", "sourceColumn", "rows"],
-      "additionalProperties": false,
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "frameCount": {
@@ -99,7 +95,7 @@
           "type": "object",
           "required": ["south", "west", "east"],
           "additionalProperties": false,
-          "description": "Output row this clip occupies for each facing, stated per facing so a consumer never has to know the row formula.",
+          "description": "Output row this clip occupies for each facing, stated per facing so a consumer never has to know the row formula. Closed to extra properties: the keys are the three facings curated geometry keeps, so an unrecognised key is a producer bug, not a newer field. Adding north here would not be an addition — curated geometry drops it deliberately.",
           "properties": {
             "south": { "type": "integer", "minimum": 0 },
             "west": { "type": "integer", "minimum": 0 },
@@ -111,7 +107,6 @@
     "fullClip": {
       "type": "object",
       "required": ["name", "columns", "isRenderedByDefault", "reverseDrawOrder"],
-      "additionalProperties": false,
       "properties": {
         "name": { "type": "string", "minLength": 1 },
         "columns": {
@@ -133,7 +128,6 @@
     "curatedLayout": {
       "type": "object",
       "required": ["width", "height", "cellSize", "columns", "rows", "frameDurationMs", "facings", "clips"],
-      "additionalProperties": false,
       "description": "The curated sheet: 8 clips on 3 facings, north dropped, frames left-aligned per row.",
       "properties": {
         "width": { "type": "integer", "exclusiveMinimum": 0 },
@@ -166,7 +160,6 @@
     "fullLayout": {
       "type": "object",
       "required": ["width", "height", "cellSize", "columns", "rows", "frameDurationMs", "facingRows", "clips"],
-      "additionalProperties": false,
       "description": "The raw source assembly, written without a remap: all source columns on all four facing rows.",
       "properties": {
         "width": { "type": "integer", "exclusiveMinimum": 0 },
@@ -179,7 +172,7 @@
           "type": "object",
           "required": ["south", "west", "east", "north"],
           "additionalProperties": false,
-          "description": "Sheet row each facing occupies. Fixed for every clip in this geometry, which is why it sits on the layout rather than on each clip.",
+          "description": "Sheet row each facing occupies. Fixed for every clip in this geometry, which is why it sits on the layout rather than on each clip. Closed to extra properties: the keys are the four source facings, a complete enumeration, so an unrecognised key is a producer bug rather than a newer field.",
           "properties": {
             "south": { "type": "integer", "minimum": 0 },
             "west": { "type": "integer", "minimum": 0 },
@@ -193,7 +186,6 @@
     "layouts": {
       "type": "object",
       "minProperties": 1,
-      "additionalProperties": false,
       "description": "A layout appears only when the run actually produced that geometry, so a manifest never describes files that are not in the folder.",
       "properties": {
         "curated": { "$ref": "#/$defs/curatedLayout" },
@@ -203,7 +195,7 @@
     "slots": {
       "type": "object",
       "additionalProperties": false,
-      "description": "The partial that filled each layer slot, back to front, by stem. A slot the sheet does not use is absent rather than empty.",
+      "description": "The partial that filled each layer slot, back to front, by stem. A slot the sheet does not use is absent rather than empty. Closed to extra properties: the keys are the ten character layers the generator composites, a complete enumeration, so an unrecognised key is a misspelled slot rather than a newer field. A new slot here is a breaking change by definition — it would alter the draw order.",
       "properties": {
         "shadow": { "type": "string", "minLength": 1 },
         "backExtra": { "type": "string", "minLength": 1 },
@@ -220,7 +212,6 @@
     "sheet": {
       "type": "object",
       "required": ["name", "file", "geometry", "slots"],
-      "additionalProperties": false,
       "properties": {
         "name": { "type": "string", "minLength": 1, "description": "The sheet's stem, without extension." },
         "file": { "type": "string", "minLength": 1, "description": "The file written, including extension. Lossless WebP, verified by round trip." },
