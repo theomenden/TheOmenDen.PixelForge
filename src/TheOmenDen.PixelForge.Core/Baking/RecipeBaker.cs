@@ -27,6 +27,31 @@ public static class RecipeBaker
     {
         Guard.IsNotNull(recipe);
 
+        var assembly = AssembleLayers(recipe);
+
+        if (!assembly.TryGet(out var assembled))
+        {
+            return new(assembly.Error);
+        }
+
+        using (assembled)
+        {
+            return Finish(assembled, recipe);
+        }
+    }
+
+    /// <summary>
+    /// Decodes a recipe's layers and composites them, stopping before the recolour. Overlays are
+    /// deliberately not applied — they belong after the substitution.
+    /// <para>
+    /// Exposed for the palette preview, which needs the assembly but neither the recolour nor an
+    /// encode. Sharing this is what keeps the decode-and-validate loop in one place.
+    /// </para>
+    /// </summary>
+    public static Result<SKBitmap, BakeFailure> AssembleLayers(SheetRecipe recipe)
+    {
+        Guard.IsNotNull(recipe);
+
         if (recipe.Layers.IsDefaultOrEmpty)
         {
             return new(BakeFailure.NoLayersSupplied);
@@ -55,17 +80,7 @@ public static class RecipeBaker
                 loaded.Add(layer);
             }
 
-            var assembly = SheetBaker.Assemble(loaded);
-
-            if (!assembly.TryGet(out var assembled))
-            {
-                return new(assembly.Error);
-            }
-
-            using (assembled)
-            {
-                return Finish(assembled, recipe);
-            }
+            return SheetBaker.Assemble(loaded);
         }
         finally
         {
