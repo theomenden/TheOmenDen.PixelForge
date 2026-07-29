@@ -41,6 +41,20 @@ Test-UI 'App window is present' {
     if (-not ($windows | Where-Object { $_.title -ne 'PopupHost' })) { throw 'no app window found' }
 }
 
+Test-UI 'Window is titled Pixel Forge' {
+    $windows = winapp ui list-windows -a $AppPid --json 2>$null | ConvertFrom-Json
+    if (-not ($windows | Where-Object { $_.title -eq 'Pixel Forge' })) {
+        throw "expected a window titled 'Pixel Forge', got: $(($windows | ForEach-Object { $_.title }) -join ', ')"
+    }
+}
+
+# Only rendered while the pane is open — a compact pane would clip it to "© 20…".
+Test-UI 'Copyright notice is in the pane footer' {
+    $notice = "$(winapp ui get-value 'CopyrightNotice' -a $AppPid 2>&1)".Trim()
+    if ($notice -ne '© 2026 - The Omen Den') { throw "unexpected copyright text: '$notice'" }
+    $global:LASTEXITCODE = 0
+}
+
 # ─── Navigation ──────────────────────────────────────────────────────────────
 Test-UI 'Nav: Canvas exists' { winapp ui wait-for 'NavCanvas' -a $AppPid -t 3000 }
 Test-UI 'Nav: Assets exists' { winapp ui wait-for 'NavAssets' -a $AppPid -t 3000 }

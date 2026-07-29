@@ -6,7 +6,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:TheOmenDen.PixelForge"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    Title="TheOmenDen.PixelForge"
+    Title="Pixel Forge"
     mc:Ignorable="d">
     <Window.SystemBackdrop>
         <MicaBackdrop />
@@ -16,11 +16,12 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TitleBar
             x:Name="AppTitleBar"
-            Title="TheOmenDen.PixelForge"
+            Title="Pixel Forge"
             BackRequested="OnTitleBarBackRequested"
             IsBackButtonVisible="{x:Bind RootFrame.CanGoBack, Mode=OneWay}"
             IsPaneToggleButtonVisible="True"
@@ -81,5 +82,18 @@
 
             <Frame x:Name="RootFrame" />
         </NavigationView>
+
+        <!--
+            Its own row rather than NavigationView.PaneFooter: the control renders PaneFooter
+            above the settings entry, and this belongs below it. A row here is also immune to
+            the pane collapsing to icons, where a 48px-wide footer would clip to "© 20…".
+        -->
+        <TextBlock
+            Grid.Row="2"
+            Margin="16,4,16,8"
+            AutomationProperties.AutomationId="CopyrightNotice"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+            Style="{StaticResource CaptionTextBlockStyle}"
+            Text="&#169; 2026 - The Omen Den" />
     </Grid>
 </Window>
