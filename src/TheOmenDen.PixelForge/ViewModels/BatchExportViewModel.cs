@@ -144,10 +144,10 @@ public sealed partial class BatchExportViewModel : ObservableObject
     /// <c>StackedNotificationsBehavior</c>, which queues them — a 79-sheet run can report several
     /// distinct failures, and a single string property would show only the last.
     /// </summary>
-    public event EventHandler<StatusNotice>? Notified;
+    public event EventHandler<StatusNoticeEventArgs>? Notified;
 
     private void Notify(string message, StatusLevel level) =>
-        Notified?.Invoke(this, new StatusNotice(message, level));
+        Notified?.Invoke(this, new StatusNoticeEventArgs(message, level));
 
     /// <summary>How many files the current selection and mode would produce.</summary>
     public int PlannedCount => Plan().Length;

@@ -80,7 +80,7 @@ public sealed partial class PipelinePage : Page
     /// Maps the view model's UI-free <see cref="StatusLevel"/> onto the toolkit's notification
     /// queue. Errors have no Duration, so they stay until dismissed.
     /// </summary>
-    private void OnNotified(object? sender, StatusNotice notice) =>
+    private void OnNotified(object? sender, StatusNoticeEventArgs notice) =>
         StatusNotifications.Show(new Notification
         {
             Message = notice.Message,

@@ -79,7 +79,7 @@ public sealed partial class PalettePage : Page
     /// Maps the view model's UI-free <see cref="StatusLevel"/> onto the toolkit's notification
     /// queue. The behavior handles stacking and timed dismissal.
     /// </summary>
-    private void OnNotified(object? sender, StatusNotice notice) =>
+    private void OnNotified(object? sender, StatusNoticeEventArgs notice) =>
         StatusNotifications.Show(new Notification
         {
             Message = notice.Message,
