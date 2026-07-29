@@ -51,7 +51,15 @@ public sealed partial class BatchExportViewModel : ObservableObject
         }
     }
 
-    public ExportMode Mode => (ExportMode)SelectedModeIndex;
+    // Segmented.SelectedIndex defaults to -1 before items are realised — an unchecked cast would
+    // silently select Both (79 files) for any out-of-range index. Layered is the cheapest mode,
+    // so it is the fallback rather than the largest one.
+    public ExportMode Mode => SelectedModeIndex switch
+    {
+        1 => ExportMode.Flattened,
+        2 => ExportMode.Both,
+        _ => ExportMode.Layered,
+    };
 
     /// <summary>
     /// The tradeoff, stated where the choice is made. Layered keeps hair a separate texture so a
@@ -64,8 +72,10 @@ public sealed partial class BatchExportViewModel : ObservableObject
             "One file per sheet. Hair stays a separate texture, so a style can be swapped at runtime without rebaking.",
         ExportMode.Flattened =>
             "Body and hair composited into one texture per pair. Fewer draw calls, but the hairstyle is baked in.",
-        _ =>
+        ExportMode.Both =>
             "Both: layered sheets for runtime swapping, plus a flattened texture for every body and hair pair.",
+        _ =>
+            "One file per sheet. Hair stays a separate texture, so a style can be swapped at runtime without rebaking.",
     };
 
     public string OutputFolder
@@ -208,21 +218,26 @@ public sealed partial class BatchExportViewModel : ObservableObject
         ProgressText = $"{report.Completed} / {report.Total}";
 
         var status = report.IsSuccess
-            ? report.Written.TryGet(out var size) ? size.ToString(null, CultureInfo.InvariantCulture) : "written"
+            ? report.Written.TryGet(out var size) ? size.ToString(null, CultureInfo.CurrentCulture) : "written"
             : report.Failure.ToString();
 
         // A flattened sheet's name is "body-NN_hair-NN", so a body row matches its own prefix.
-        Mark(Bodies, report.Name, status);
-        Mark(Hair, report.Name, status);
+        Mark(Bodies, report.Name, status, report.IsSuccess);
+        Mark(Hair, report.Name, status, report.IsSuccess);
     }
 
-    private static void Mark(ObservableCollection<SheetSelectionItem> items, string name, string status)
+    private static void Mark(ObservableCollection<SheetSelectionItem> items, string name, string status, bool isSuccess)
     {
         foreach (var item in items)
         {
             if (name == item.Name || name.StartsWith(item.Name + "_", StringComparison.Ordinal) || name.EndsWith("_" + item.Name, StringComparison.Ordinal))
             {
-                item.Status = status;
+                // Sticky failures: a flattened body/hair row is written by up to nine pairs, so a
+                // later success must not paper over an earlier failure on the same row.
+                if (!isSuccess || item.Status.Length is 0)
+                {
+                    item.Status = status;
+                }
             }
         }
     }
@@ -271,6 +286,14 @@ public sealed partial class BatchExportViewModel : ObservableObject
 
     private void Reload()
     {
+        // A run survives navigation, so the user can walk off and re-pick a pack path mid-export.
+        // Rebuilding the grid under an in-flight run would orphan every Mark() the run still owes
+        // and silently reset the selection; the run itself still completes against its snapshot.
+        if (IsExporting)
+        {
+            return;
+        }
+
         Bodies.Clear();
         Hair.Clear();
 
