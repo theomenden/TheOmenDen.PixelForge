@@ -33,16 +33,13 @@ public sealed class RampService(ILogger<RampService> logger)
         {
             foreach (var ramp in Ramps)
             {
-                if (!IsBuiltIn(ramp))
+                if (!SkinRamps.IsBuiltIn(ramp))
                 {
                     yield return ramp;
                 }
             }
         }
     }
-
-    public static bool IsBuiltIn(SkinRamp ramp) =>
-        SkinRamps.All.AsSpan().Any(r => string.Equals(r.Name, ramp.Name, StringComparison.OrdinalIgnoreCase));
 
     public Result<int, RampFailure> Load()
     {
@@ -58,7 +55,7 @@ public sealed class RampService(ILogger<RampService> logger)
         // Drop only the customs — the built-ins stay put so the view never sees an empty list.
         for (var i = Ramps.Count - 1; i >= 0; i--)
         {
-            if (!IsBuiltIn(Ramps[i]))
+            if (!SkinRamps.IsBuiltIn(Ramps[i]))
             {
                 Ramps.RemoveAt(i);
             }
@@ -138,7 +135,7 @@ public sealed class RampService(ILogger<RampService> logger)
 
         foreach (var ramp in ramps)
         {
-            if (IsBuiltIn(ramp))
+            if (SkinRamps.IsBuiltIn(ramp))
             {
                 // A built-in's name is taken. Skip rather than fail the whole import.
                 logger.SkippedBuiltInImport(ramp.Name);
@@ -176,7 +173,7 @@ public sealed class RampService(ILogger<RampService> logger)
     {
         for (var i = 0; i < Ramps.Count; i++)
         {
-            if (!IsBuiltIn(Ramps[i]) && string.Equals(Ramps[i].Name, name, StringComparison.OrdinalIgnoreCase))
+            if (!SkinRamps.IsBuiltIn(Ramps[i]) && string.Equals(Ramps[i].Name, name, StringComparison.OrdinalIgnoreCase))
             {
                 return i;
             }
@@ -198,7 +195,7 @@ public sealed class RampService(ILogger<RampService> logger)
             return RampFailure.WrongStepCount;
         }
 
-        if (IsBuiltIn(ramp))
+        if (SkinRamps.IsBuiltIn(ramp))
         {
             return RampFailure.DuplicateName;
         }

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using ColorHelper;
+using CommunityToolkit.Diagnostics;
 using SkiaSharp;
 
 namespace TheOmenDen.PixelForge.Core.Palettes;
@@ -93,4 +94,18 @@ public static class SkinRamps
     /// System.Linq. A span is covered.
     /// </remarks>
     public static ImmutableArray<SkinRamp> Human { get; } = [.. All.AsSpan().Where(static r => r.IsHuman)];
+
+    /// <summary>
+    /// Whether <paramref name="ramp"/> is one of the shipped ramps, matched by name.
+    /// <para>
+    /// Name is the identity: a custom ramp may not shadow a built-in, so this is also what
+    /// enforces that uniqueness rule. Comparison is case-insensitive.
+    /// </para>
+    /// </summary>
+    public static bool IsBuiltIn(SkinRamp ramp)
+    {
+        Guard.IsNotNull(ramp);
+
+        return All.AsSpan().Any(r => string.Equals(r.Name, ramp.Name, StringComparison.OrdinalIgnoreCase));
+    }
 }

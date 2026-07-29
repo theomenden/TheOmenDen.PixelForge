@@ -92,4 +92,25 @@ public sealed class SkinRampTests
             Assert.Equal(SkinRamps.StepCount, packed.AsSpan().Distinct().ToArray().Length);
         }
     }
+
+    [Fact]
+    public void IsBuiltIn_RecognisesEveryShippedRamp()
+    {
+        foreach (var ramp in SkinRamps.All)
+        {
+            Assert.True(SkinRamps.IsBuiltIn(ramp), $"{ramp.Name} should be built-in");
+        }
+    }
+
+    [Fact]
+    public void IsBuiltIn_MatchesOnNameIgnoringCase_SoACustomCannotShadowAShippedRamp()
+    {
+        var shadow = SkinRamps.Source with { Name = SkinRamps.Source.Name.ToUpperInvariant() };
+
+        Assert.True(SkinRamps.IsBuiltIn(shadow));
+    }
+
+    [Fact]
+    public void IsBuiltIn_IsFalse_ForANameThatIsNotShipped()
+        => Assert.False(SkinRamps.IsBuiltIn(SkinRamps.Source with { Name = "Definitely Not Shipped" }));
 }
