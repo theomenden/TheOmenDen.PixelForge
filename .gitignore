@@ -55,3 +55,6 @@ Generated\ Files/
 
 # UI test artifacts
 tests/ui-results/
+
+# Agent worktrees
+.claude/worktrees/
