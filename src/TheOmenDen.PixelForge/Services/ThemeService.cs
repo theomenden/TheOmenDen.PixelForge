@@ -51,7 +51,7 @@ public sealed class ThemeService(ILogger<ThemeService> logger) : IThemeService
 
     private static ElementTheme Load()
     {
-        if (!App.IsPackaged)
+        if (!AppPaths.IsPackaged)
         {
             return ElementTheme.Default;
         }
@@ -67,7 +67,7 @@ public sealed class ThemeService(ILogger<ThemeService> logger) : IThemeService
     {
         // Unpackaged launches have no LocalSettings store; the choice applies for the
         // session but is not persisted.
-        if (!App.IsPackaged)
+        if (!AppPaths.IsPackaged)
         {
             return;
         }

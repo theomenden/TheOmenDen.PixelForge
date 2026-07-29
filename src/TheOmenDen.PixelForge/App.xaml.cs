@@ -6,8 +6,6 @@ using TheOmenDen.PixelForge.ViewModels;
 using Microsoft.UI.Xaml;
 using Serilog;
 using Serilog.Formatting.Compact;
-using Windows.ApplicationModel;
-using Windows.Storage;
 
 namespace TheOmenDen.PixelForge;
 
@@ -43,32 +41,6 @@ public partial class App : Application
         Services = _host.Services;
     }
 
-    /// <summary>
-    /// Log directory. A packaged app's install directory is read-only, so logs must go to
-    /// LocalState; Serilog swallows sink failures, so a relative path would silently
-    /// produce no logs at all rather than an error.
-    /// </summary>
-    private static string LogDirectory => field ??= Path.Combine(
-        IsPackaged ? ApplicationData.Current.LocalFolder.Path : AppContext.BaseDirectory,
-        "logs");
-
-    internal static bool IsPackaged
-    {
-        get
-        {
-            // Package.Current throws when the app runs without package identity
-            // (the "Unpackaged" launch profile).
-            try
-            {
-                return Package.Current is not null;
-            }
-            catch (InvalidOperationException)
-            {
-                return false;
-            }
-        }
-    }
-
     private static IHost BuildHost()
     {
         var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
@@ -84,11 +56,11 @@ public partial class App : Application
             .Enrich.FromLogContext()
             .Enrich.WithProperty("Application", "TheOmenDen.PixelForge")
             // File sink is composed here rather than in appsettings.json because the
-            // path is only resolvable at runtime (see LogDirectory). Async wraps it so
+            // path is only resolvable at runtime (see AppPaths.Logs). Async wraps it so
             // disk writes never block the UI thread during a batch pipeline run.
             .WriteTo.Async(sink => sink.File(
                 new CompactJsonFormatter(),
-                Path.Combine(LogDirectory, "pixelforge-.log"),
+                Path.Combine(AppPaths.Logs.Value, "pixelforge-.log"),
                 rollingInterval: RollingInterval.Day,
                 rollOnFileSizeLimit: true,
                 fileSizeLimitBytes: 32L * 1024 * 1024,
@@ -106,7 +78,7 @@ public partial class App : Application
     /// <param name="args">Details about the launch request and process.</param>
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        Log.Information("PixelForge starting. Logs: {LogDirectory}", LogDirectory);
+        Log.Information("PixelForge starting. Logs: {LogDirectory}", AppPaths.Logs);
 
         _window = new MainWindow();
         _window.Closed += OnMainWindowClosed;
