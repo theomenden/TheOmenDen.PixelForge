@@ -114,6 +114,7 @@ dotnet_diagnostic.CA2213.severity = warning   # disposable fields should be disp
 dotnet_diagnostic.CA2215.severity = warning   # Dispose should call base.Dispose
 dotnet_diagnostic.CA2216.severity = warning   # disposable types with unmanaged state need a finalizer
 dotnet_diagnostic.CA2007.severity = none      # ConfigureAwait — not wanted in UI code
+dotnet_diagnostic.MA0004.severity = none      # the same rule from Meziantou.Analyzer
 dotnet_diagnostic.CA1848.severity = none      # LoggerMessage source-gen — opt in per case
 
 # ── Naming ───────────────────────────────────────────────────────────────────
