@@ -201,7 +201,7 @@ public sealed class SheetBakerTests
     public void Recolor_ReplacesRampColours_AndLeavesEverythingElseAlone()
     {
         var target = SkinRamps.All[3];
-        var substitution = target.SubstitutionFrom(SkinRamps.Source);
+        var substitution = target.LegacySubstitutionFrom(SkinRamps.Source);
 
         using var source = NewBitmap(4, 1);
         var pixels = source.Pixels;
@@ -240,7 +240,7 @@ public sealed class SheetBakerTests
 
         foreach (var ramp in SkinRamps.All)
         {
-            using var recolored = RecolorOrFail(source, ramp.SubstitutionFrom(SkinRamps.Source));
+            using var recolored = RecolorOrFail(source, ramp.LegacySubstitutionFrom(SkinRamps.Source));
 
             for (var step = 0; step < SkinRamps.StepCount; step++)
             {
