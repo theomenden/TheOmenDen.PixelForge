@@ -68,6 +68,7 @@ public partial class App : Application
 
         builder.Services.AddSingleton<IThemeService, ThemeService>();
         builder.Services.AddSingleton<SourcePackService>();
+        builder.Services.AddSingleton<RampService>();
         builder.Services.AddSingleton<PickerService>();
         builder.Services.AddTransient<SettingsViewModel>();
 
@@ -83,6 +84,7 @@ public partial class App : Application
         Log.Information("PixelForge starting. Logs: {LogDirectory}", AppPaths.Logs);
 
         Services.GetRequiredService<SourcePackService>().Load();
+        Services.GetRequiredService<RampService>().Load();
 
         _window = new MainWindow();
         _window.Closed += OnMainWindowClosed;
