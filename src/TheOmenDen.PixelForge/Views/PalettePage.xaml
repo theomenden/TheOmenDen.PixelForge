@@ -51,6 +51,7 @@
                 x:Name="RampList"
                 AutomationProperties.AutomationId="RampList"
                 AutomationProperties.Name="Skin ramps"
+                ContainerContentChanging="OnRampContainerChanging"
                 ItemsSource="{x:Bind ViewModel.RampView, Mode=OneWay}"
                 SelectedItem="{x:Bind ViewModel.SelectedRamp, Mode=TwoWay}">
                 <ListView.ItemTemplate>

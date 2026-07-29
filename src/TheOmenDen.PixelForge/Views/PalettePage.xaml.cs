@@ -3,6 +3,7 @@ using System.ComponentModel;
 using CommunityToolkit.WinUI.Behaviors;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using SkiaSharp;
@@ -21,6 +22,15 @@ public sealed partial class PalettePage : Page
 {
     /// <summary>Shown whenever there is nothing to render — no ramp, or no packs configured.</summary>
     private const string NoPreviewHint = "Set the source pack folders in Settings to see a live preview.";
+
+    /// <summary>
+    /// Nearest-neighbour multiplier for the preview strip: 48px cells are unreadable at 1:1, and
+    /// 4x keeps the three faces (576x192) inside the editor column without a scrollbar.
+    /// </summary>
+    private const int PreviewScale = 4;
+
+    /// <summary>How long a non-error notice stays up before the behavior dismisses it.</summary>
+    private static readonly TimeSpan NoticeDuration = TimeSpan.FromSeconds(4);
 
     private PalettePreview? _preview;
 
@@ -46,6 +56,26 @@ public sealed partial class PalettePage : Page
                 steps[index].Alpha, steps[index].Red, steps[index].Green, steps[index].Blue));
 
     /// <summary>
+    /// Names each row for its ramp. Without this a row announces the record's generated
+    /// <c>ToString</c> — "SkinRamp { Name = Tone 1, Steps = System.Collections.Immutable…" —
+    /// since UIA falls back to the data item when the container has no name of its own, and the
+    /// swatch strip carries no text to announce instead. A <c>Style</c> setter cannot fix it:
+    /// WinUI does not support <c>{Binding}</c> in <c>Setter.Value</c>, so it binds to nothing
+    /// and silently changes nothing.
+    /// </summary>
+    // CA1822: a XAML event handler has to be an instance method — the generated Connect() code
+    // calls it through `this`, so taking the analyzer's advice fails the build with CS0176.
+#pragma warning disable CA1822
+    private void OnRampContainerChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+    {
+        if (!args.InRecycleQueue && args.Item is SkinRamp ramp)
+        {
+            AutomationProperties.SetName(args.ItemContainer, ramp.Name);
+        }
+    }
+#pragma warning restore CA1822
+
+    /// <summary>
     /// Maps the view model's UI-free <see cref="StatusLevel"/> onto the toolkit's notification
     /// queue. The behavior handles stacking and timed dismissal.
     /// </summary>
@@ -60,7 +90,7 @@ public sealed partial class PalettePage : Page
                 StatusLevel.Error => InfoBarSeverity.Error,
                 _ => InfoBarSeverity.Informational,
             },
-            Duration = notice.Level is StatusLevel.Error ? null : TimeSpan.FromSeconds(4),
+            Duration = notice.Level is StatusLevel.Error ? null : NoticeDuration,
         });
 
     private void OnLoaded(object sender, RoutedEventArgs e)
@@ -145,7 +175,7 @@ public sealed partial class PalettePage : Page
             }
         }
 
-        var rendered = _preview.RenderIdleRow(ramp, scale: 4);
+        var rendered = _preview.RenderIdleRow(ramp, PreviewScale);
 
         if (!rendered.TryGet(out var bitmap))
         {
