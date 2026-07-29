@@ -96,8 +96,8 @@
                     AutomationProperties.Name="Export mode"
                     SelectionChanged="OnExportModeChanged"
                     SelectionMode="Single">
-                    <controls:SegmentedItem Content="Layered" Icon="{ui:FontIcon Glyph=&#xE81E;}" />
-                    <controls:SegmentedItem Content="Flattened" Icon="{ui:FontIcon Glyph=&#xE7C4;}" />
+                    <controls:SegmentedItem Content="Curated" Icon="{ui:FontIcon Glyph=&#xE81E;}" />
+                    <controls:SegmentedItem Content="Full" Icon="{ui:FontIcon Glyph=&#xE7C4;}" />
                     <controls:SegmentedItem Content="Both" Icon="{ui:FontIcon Glyph=&#xE8C6;}" />
                 </controls:Segmented>
                 <TextBlock
@@ -109,104 +109,25 @@
             </StackPanel>
         </Grid>
 
-        <!--  Selection  -->
-        <Grid Grid.Row="3">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" MinWidth="200" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" MinWidth="200" />
-            </Grid.ColumnDefinitions>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-            </Grid.RowDefinitions>
-
-            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Bodies" />
+        <!--
+            Selection — the per-slot picker lands here. A placeholder rather than the old two
+            ListViews: those bound to a fixed table of sixteen recipes, which the scanned
+            catalogue replaced, so there is nothing left for them to list.
+        -->
+        <Border
+            Grid.Row="3"
+            Padding="24"
+            VerticalAlignment="Center"
+            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="{ThemeResource ControlCornerRadius}">
             <TextBlock
-                Grid.Column="2"
-                Style="{StaticResource BodyStrongTextBlockStyle}"
-                Text="Hair" />
-
-            <!--
-                Equal starting widths, not the 300-360px sidebar the design rubric asks for:
-                bodies and hair are peer collections of comparable size, neither subordinate to
-                the other. The splitter makes the split adjustable anyway.
-            -->
-            <controls:GridSplitter
-                Grid.Row="1"
-                Grid.Column="1"
-                Width="16"
-                AutomationProperties.AutomationId="SheetListSplitter"
-                AutomationProperties.Name="Resize sheet lists"
-                ResizeBehavior="BasedOnAlignment"
-                ResizeDirection="Auto">
-                <controls:GridSplitter.RenderTransform>
-                    <TranslateTransform X="-7" />
-                </controls:GridSplitter.RenderTransform>
-            </controls:GridSplitter>
-
-            <!--
-                SelectionMode="None" with explicit CheckBox rows: each row also carries a status
-                column and its own automation id, so the template is explicit regardless, and
-                ListView's own Multiple selection would be a second model competing with IsSelected.
-            -->
-            <ListView
-                Grid.Row="1"
-                AutomationProperties.AutomationId="BodySheetList"
-                AutomationProperties.Name="Body sheets"
-                ItemsSource="{x:Bind ViewModel.Bodies, Mode=OneWay}"
-                SelectionMode="None">
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="vm:SheetSelectionItem">
-                        <Grid Padding="0,4" ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <CheckBox
-                                AutomationProperties.AutomationId="{x:Bind AutomationId}"
-                                Content="{x:Bind Name}"
-                                IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
-                            <TextBlock
-                                Grid.Column="1"
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="{x:Bind Status, Mode=OneWay}" />
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-
-            <ListView
-                Grid.Row="1"
-                Grid.Column="2"
-                AutomationProperties.AutomationId="HairSheetList"
-                AutomationProperties.Name="Hair sheets"
-                ItemsSource="{x:Bind ViewModel.Hair, Mode=OneWay}"
-                SelectionMode="None">
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="vm:SheetSelectionItem">
-                        <Grid Padding="0,4" ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <CheckBox
-                                AutomationProperties.AutomationId="{x:Bind AutomationId}"
-                                Content="{x:Bind Name}"
-                                IsChecked="{x:Bind IsSelected, Mode=TwoWay}" />
-                            <TextBlock
-                                Grid.Column="1"
-                                VerticalAlignment="Center"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                                Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="{x:Bind Status, Mode=OneWay}" />
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-        </Grid>
+                AutomationProperties.AutomationId="SlotPickerPlaceholder"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                Text="Per-slot picker pending. Load the Roost set to plan the spec-079 selection."
+                TextWrapping="Wrap" />
+        </Border>
 
         <!--  Run  -->
         <Grid Grid.Row="4" ColumnSpacing="12">
@@ -244,6 +165,11 @@
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="{x:Bind local:PipelinePage.PlannedLabel(ViewModel.PlannedCount), Mode=OneWay}" />
+                <Button
+                    AutomationProperties.AutomationId="BtnLoadRoostSelection"
+                    AutomationProperties.Name="Load the spec-079 selection"
+                    Command="{x:Bind ViewModel.LoadRoostSelectionCommand}"
+                    Content="Roost set (079)" />
                 <Button
                     AutomationProperties.AutomationId="BtnExport"
                     Command="{x:Bind ViewModel.ExportCommand}"

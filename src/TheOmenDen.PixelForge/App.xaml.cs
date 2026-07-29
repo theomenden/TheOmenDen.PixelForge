@@ -100,6 +100,7 @@ public partial class App : Application
 
         builder.Services.AddSingleton<IThemeService, ThemeService>();
         builder.Services.AddSingleton<SourcePackService>();
+        builder.Services.AddSingleton<CatalogService>();
         builder.Services.AddSingleton<RampService>();
         builder.Services.AddSingleton<PickerService>();
         builder.Services.AddSingleton<SettingsViewModel>();
@@ -119,6 +120,11 @@ public partial class App : Application
 
         Services.GetRequiredService<SourcePackService>().Load();
         Services.GetRequiredService<RampService>().Load();
+
+        // Explicit rather than left to SourcePackService.Load's Changed event: nothing has
+        // resolved CatalogService yet at that point, so its subscription is not live and a first
+        // run would show an empty picker until a pack path was re-picked.
+        Services.GetRequiredService<CatalogService>().Rescan();
 
         _window = new MainWindow();
         _window.Closed += OnMainWindowClosed;

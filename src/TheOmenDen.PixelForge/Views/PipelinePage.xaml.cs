@@ -34,8 +34,15 @@ public sealed partial class PipelinePage : Page
 
     public BatchExportViewModel ViewModel { get; } = App.Services.GetRequiredService<BatchExportViewModel>();
 
-    /// <summary>How many files the current selection and mode would write.</summary>
-    public static string PlannedLabel(int count) => count is 1 ? "1 file" : $"{count} files";
+    /// <summary>
+    /// How many files the current selection and mode would write.
+    /// </summary>
+    /// <param name="count">
+    /// <see langword="long"/>, matching <see cref="BatchExportViewModel.PlannedCount"/>: a cross
+    /// product over ten slots passes <see langword="int"/> without much effort.
+    /// </param>
+    /// <returns>The count with its unit, singular for exactly one.</returns>
+    public static string PlannedLabel(long count) => count is 1 ? "1 file" : $"{count} files";
 
     private void OnLoaded(object sender, RoutedEventArgs e)
     {
@@ -60,7 +67,7 @@ public sealed partial class PipelinePage : Page
 
     /// <summary>
     /// A selection of -1 is the control clearing itself while it re-realises its items, never a
-    /// user choice — taking it would reset the mode to Layered behind the user's back.
+    /// user choice — taking it would reset the mode to Curated behind the user's back.
     /// </summary>
     private void OnExportModeChanged(object sender, SelectionChangedEventArgs e)
     {

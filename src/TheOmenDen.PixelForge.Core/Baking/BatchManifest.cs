@@ -1,8 +1,10 @@
+using System.Collections.Immutable;
 using System.Globalization;
 using CommunityToolkit.Diagnostics;
 using CsvHelper;
 using DotNext;
 using Meziantou.Framework;
+using TheOmenDen.PixelForge.Core.Catalog;
 
 namespace TheOmenDen.PixelForge.Core.Baking;
 
@@ -40,6 +42,67 @@ public static class BatchManifest
     /// </remarks>
     /// <returns>A UUIDv7 whose text form orders by creation time.</returns>
     public static Guid NewRunId() => Guid.CreateVersion7();
+
+    /// <summary>
+    /// Describes a batch of baked recipes as manifest rows, one per sheet, in bake order.
+    /// </summary>
+    /// <param name="recipes">The recipes a run was given, as planned.</param>
+    /// <returns>One <see cref="BatchManifestRow"/> per recipe.</returns>
+    public static ImmutableArray<BatchManifestRow> RowsFor(ImmutableArray<SheetRecipe> recipes) =>
+        [.. recipes.AsSpan().Select(RowFor)];
+
+    /// <summary>
+    /// One row: the sheet, and the partial that filled each slot.
+    /// </summary>
+    /// <param name="recipe">The recipe the sheet was baked from.</param>
+    /// <returns>The row, with a blank cell for every slot the recipe left empty.</returns>
+    /// <remarks>
+    /// <para>
+    /// The slot comes from each layer's parent folder rather than from the recipe, which carries
+    /// only paths and skin flags by the time it reaches the baker. That folder name <em>is</em> the
+    /// slot — see <see cref="Catalog.AssetSlots.FolderName"/> — so the mapping is exact rather than
+    /// inferred, and a path from somewhere else simply contributes no column.
+    /// </para>
+    /// <para>
+    /// Staged through an array indexed by slot rather than through ten conditionals, because
+    /// <see cref="AssetSlot"/>'s value <em>is</em> its position and a new member would otherwise
+    /// need a new branch as well as a new column.
+    /// </para>
+    /// </remarks>
+    public static BatchManifestRow RowFor(SheetRecipe recipe)
+    {
+        Guard.IsNotNull(recipe);
+
+        var stems = new string[AssetSlots.DrawOrder.Length];
+
+        Array.Fill(stems, string.Empty);
+
+        foreach (var layer in recipe.Layers)
+        {
+            if (Enum.TryParse<AssetSlot>(layer.Path.Parent.Name, ignoreCase: true, out var slot))
+            {
+                stems[(int)slot] = layer.Path.NameWithoutExtension;
+            }
+        }
+
+        return new()
+        {
+            Name = recipe.Name,
+            File = recipe.Name + SheetWriter.Extension,
+            Geometry = recipe.Geometry.ToString(),
+            Tone = recipe.Tone.TryGet(out var ramp) ? ramp.Name : string.Empty,
+            Shadow = stems[(int)AssetSlot.Shadow],
+            BackExtra = stems[(int)AssetSlot.BackExtra],
+            BackHair = stems[(int)AssetSlot.BackHair],
+            Bottom = stems[(int)AssetSlot.Bottom],
+            Top = stems[(int)AssetSlot.Top],
+            Head = stems[(int)AssetSlot.Head],
+            Hair = stems[(int)AssetSlot.Hair],
+            FrontExtra = stems[(int)AssetSlot.FrontExtra],
+            Hat = stems[(int)AssetSlot.Hat],
+            Weapon = stems[(int)AssetSlot.Weapon],
+        };
+    }
 
     /// <summary>Writes <c>sheets.csv</c> into an export directory.</summary>
     /// <param name="directory">Where the run's sheets were written.</param>
