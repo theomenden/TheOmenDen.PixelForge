@@ -3223,7 +3223,11 @@ public sealed record SlotSelection
 
 Key points for the implementer:
 
-- Validate first: empty selections is `NothingSelected`; any required slot missing, empty, or offering `None` is `RequiredSlotEmpty`.
+- Validate first: empty selections is `NothingSelected`. The required-slot rule is **all-or-nothing, not always-on** — count the required slots (bottom, top, head) that are *definitely* filled, meaning present, non-empty, and offering no `None` among their choices. A count of 1 or 2 is `RequiredSlotEmpty`; 0 and 3 are both legal.
+
+  > **This corrects an earlier draft of this step**, which said any missing required slot was a failure. That reading contradicts this task's own tests and would make the Corvus layered contract unexpressible: a run that ticks only hair has zero body slots filled and must succeed, because `hair-01..09` ship as standalone overlay textures. Committing to *part* of a body is the mistake worth blocking; committing to none of it is a deliberate overlay run.
+  >
+  > Accepted consequence: a single body slot on its own — a bare `bottom0` as a stackable texture — is rejected. That matches the contract, where body parts are only ever composited as `bottom + top + head` and never shipped individually.
 - Sort the selections by `Slot` (the enum value is the draw order) before iterating, so layers come out ordered without a second sort per combination.
 - Walk the combinations with an odometer over the per-slot choice indices — neither ZLinq nor System.Linq ships a cartesian product over a variable number of sequences, and that absence is why this is hand-written.
 - For each combination, gather the non-`None` partials. If any of them sits on a skin-bearing slot, emit one recipe per tone; otherwise emit exactly one with `Tone = Optional<SkinRamp>.None`.

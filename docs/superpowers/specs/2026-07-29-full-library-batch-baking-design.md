@@ -138,6 +138,14 @@ Optional slots come from `Settings.json` `IsOptional`: everything except **Botto
 absent. Optional slot lists therefore carry an explicit `(none)` entry, so one run can produce both a
 hatted and a hatless character.
 
+The three required slots are enforced **all-or-nothing rather than always-on**: a selection either
+fills all of bottom, top and head, or none of them. Filling one or two is `RequiredSlotEmpty` — a
+half-committed body, almost always a top picked without a head. Filling none is legal and is how the
+layered contract is expressed: a run that ticks only hair produces the standalone `hair-01..09`
+overlay textures Corvus stacks over a body sheet. The consequence, accepted: a lone body slot as a
+stackable texture is rejected, which matches a contract where body parts are only ever composited as
+`bottom + top + head`.
+
 ### 2. Per-layer recolour
 
 `AssetSlot.IsSkinBearing` is true for **Bottom, Top, Head** and false for everything else. Each layer
