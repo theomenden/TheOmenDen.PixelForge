@@ -117,12 +117,12 @@ Three lenses were applied to the spec before this plan. Each produced a concrete
 | 13 | `StatusLevel` | `App/ViewModels/StatusLevel.cs` |
 | 13 | `StatusNotice` | `App/ViewModels/StatusNotice.cs` |
 | 13 | `PaletteViewModel` | `App/ViewModels/PaletteViewModel.cs` |
-| 14 | `SkiaImageSource` | `App/Views/SkiaImageSource.cs` |
+| 14 | *(none — package only)* | `SkiaSharp.Views.WinUI` provides `ToWriteableBitmap()` |
 | 16 | `ExportMode` | `App/ViewModels/ExportMode.cs` |
 | 16 | `SheetSelectionItem` | `App/ViewModels/SheetSelectionItem.cs` |
 | 16 | `BatchExportViewModel` | `App/ViewModels/BatchExportViewModel.cs` |
 
-`SkiaImageSource.IBufferByteAccess` is a private nested interface and stays with its parent — nested types are the one exception.
+Nested types stay with their parent — that is the one exception to one-type-per-file. (Task 14 no longer creates a type at all; see its rewrite.)
 
 ---
 
@@ -190,7 +190,7 @@ git commit -m "refactor(core): one type per file"
 | `src/…PixelForge/Services/RampService.cs` | Built-ins + customs; uniqueness; import/export |
 | `src/…PixelForge/ViewModels/PaletteViewModel.cs` | Ramp list, step editing, commands |
 | `src/…PixelForge/ViewModels/BatchExportViewModel.cs` | Sheet selection, mode, export/cancel, progress |
-| `src/…PixelForge/Views/SkiaImageSource.cs` | `SKBitmap` → `WriteableBitmap` at the platform edge |
+| *(removed)* | Task 14 uses `SkiaSharp.Views.WinUI`'s `ToWriteableBitmap()` instead of a custom bridge |
 | `src/…PixelForge/Views/PalettePage.xaml{,.cs}` | Palette UI |
 | `tests/…Core.Tests/Baking/SheetWriterTests.cs` | |
 | `tests/…Core.Tests/Baking/BatchBakerTests.cs` | |
@@ -2131,7 +2131,7 @@ git commit -m "feat(core): persist custom skin ramps as CSV"
   - `PalettePreview.RenderIdleRow(SkinRamp ramp, int scale)` → `Result<SKBitmap, BakeFailure>`
   - `PalettePreview.IdleRowWidth` / `IdleRowHeight` constants
 
-  Task 15 renders the result through `SkiaImageSource`.
+  Task 15 renders the result through `SkiaSharp.Views.WinUI`'s `ToWriteableBitmap()` extension.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -4106,93 +4106,55 @@ git commit -m "feat(app): add palette view model"
 
 ---
 
-### Task 14: SKBitmap to WriteableBitmap
+### Task 14: SKBitmap to WriteableBitmap — use the first-party package
+
+**This task was rewritten.** The original hand-rolled a COM `IBufferByteAccess` interop to copy an `SKBitmap` into a `WriteableBitmap`, and the plan's own risk list named that marshalling as its least certain element. It is unnecessary: **`SkiaSharp.Views.WinUI` ships `ToWriteableBitmap()`**, from the same vendor, at `4.151.0-rc.1.1` — the exact version this project already pins for `SkiaSharp`.
+
+Verified in the package assembly (`lib/net10.0-windows10.0.19041/SkiaSharp.Views.Windows.dll`): `ToWriteableBitmap`, `ToSKBitmap`, `ToSKImage`, plus `SKXamlCanvas`, `SKSwapChainPanel` and `SKPaintSurfaceEventArgs`.
+
+There is no custom type in this task any more. It is a package reference and a using directive.
 
 **Files:**
-- Create: `src/TheOmenDen.PixelForge/Views/SkiaImageSource.cs`
+- Modify: `Directory.Packages.props`
+- Modify: `src/TheOmenDen.PixelForge/TheOmenDen.PixelForge.csproj`
 
 **Interfaces:**
-- Produces: `SkiaImageSource.ToWriteableBitmap(SKBitmap)` → `WriteableBitmap`. Task 15 calls it.
+- Produces: the extension method `SKBitmap.ToWriteableBitmap()` (namespace `SkiaSharp.Views.Windows`), available to Task 15. **No `SkiaImageSource` type exists** — delete it from the File Split Map expectations.
 
-- [ ] **Step 1: Write the helper**
+- [ ] **Step 1: Add the package**
 
-Create `src/TheOmenDen.PixelForge/Views/SkiaImageSource.cs`:
+In `Directory.Packages.props`, in the graphics/colour `ItemGroup` beside the existing `SkiaSharp` entry:
 
-```csharp
-using System.Runtime.InteropServices;
-using Microsoft.UI.Xaml.Media.Imaging;
-using SkiaSharp;
-
-namespace TheOmenDen.PixelForge.Views;
-
-/// <summary>
-/// Bridges a Skia bitmap onto a XAML <see cref="WriteableBitmap"/>.
-/// <para>
-/// The channel and alpha conversion is Skia's:
-/// <see cref="SKPixmap.ReadPixels(SKImageInfo, nint, int, int, int)"/> is asked for
-/// BGRA8888/premultiplied, which is exactly what <c>WriteableBitmap.PixelBuffer</c> holds. Doing
-/// it any other way means a hand-rolled channel swap, and getting red and blue backwards is the
-/// classic way this goes wrong.
-/// </para>
-/// <para>
-/// Lives in the app project because <see cref="WriteableBitmap"/> is a UI type — Core stays free
-/// of <c>Microsoft.UI.*</c>, and view models deal in <see cref="SKBitmap"/>.
-/// </para>
-/// </summary>
-internal static class SkiaImageSource
-{
-    [ComImport]
-    [Guid("905a0fef-bc53-11df-8c49-001e4fc686da")]
-    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
-    private interface IBufferByteAccess
-    {
-        void Buffer(out nint buffer);
-    }
-
-    /// <summary>
-    /// Copies <paramref name="source"/> into a new <see cref="WriteableBitmap"/>. The source is
-    /// not disposed — the caller owns it.
-    /// </summary>
-    public static WriteableBitmap ToWriteableBitmap(SKBitmap source)
-    {
-        Guard.IsNotNull(source);
-
-        var target = new WriteableBitmap(source.Width, source.Height);
-
-        var access = (IBufferByteAccess)(object)target.PixelBuffer;
-
-        access.Buffer(out var destination);
-
-        using var pixmap = source.PeekPixels();
-
-        // WriteableBitmap.PixelBuffer is BGRA8 premultiplied. Skia converts on read, so no
-        // channel arithmetic happens here.
-        var info = new SKImageInfo(
-            source.Width, source.Height, SKColorType.Bgra8888, SKAlphaType.Premul);
-
-        pixmap?.ReadPixels(info, destination, source.Width * 4, 0, 0);
-
-        target.Invalidate();
-
-        return target;
-    }
-}
+```xml
+    <PackageVersion Include="SkiaSharp.Views.WinUI" Version="4.151.0-rc.1.1" />
 ```
 
-Add `using CommunityToolkit.Diagnostics;`.
+Version-matched to `SkiaSharp` deliberately — the views package binds against the core package's `SKBitmap`, so a version skew is a runtime type-identity failure, not a compile error.
 
-- [ ] **Step 2: Build**
+In `src/TheOmenDen.PixelForge/TheOmenDen.PixelForge.csproj`, in the WinUI toolkit `ItemGroup`:
 
-Run: `dotnet build TheOmenDen.PixelForge.slnx`
+```xml
+    <PackageReference Include="SkiaSharp.Views.WinUI" />
+```
 
-If `IBufferByteAccess` fails to marshal under CsWinRT, the supported alternative is to encode the bitmap to PNG into a `RecyclableMemoryStream` and call `BitmapImage.SetSourceAsync(stream.AsRandomAccessStream())`. `AsRandomAccessStream` is confirmed present in `Microsoft.Windows.SDK.NET.dll`. That path allocates an encode per frame, so prefer the buffer path and only fall back if it does not marshal.
+No `Version=` attribute — restore error under CPM.
+
+- [ ] **Step 2: Verify the extension method resolves**
+
+Run: `dotnet restore TheOmenDen.PixelForge.slnx` then `dotnet build TheOmenDen.PixelForge.slnx`
+
+Expected: succeeds, 0 warnings. The extension lives in namespace `SkiaSharp.Views.Windows` (note: **Windows**, not WinUI — the package id and the namespace differ). Task 15's code-behind adds `using SkiaSharp.Views.Windows;` and calls `bitmap.ToWriteableBitmap()`.
+
+Nothing else changes in this task — no new file, no code. If the build is green the extension is available; Task 15 is where it is actually exercised.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add src/TheOmenDen.PixelForge/Views/SkiaImageSource.cs
-git commit -m "feat(app): bridge Skia bitmaps onto WriteableBitmap"
+git add Directory.Packages.props src/TheOmenDen.PixelForge/TheOmenDen.PixelForge.csproj
+git commit -m "build(app): add SkiaSharp.Views.WinUI for the Skia-to-XAML bridge"
 ```
+
+**Noted for later, not now:** `SKXamlCanvas` would let the palette preview draw straight into a XAML surface with no intermediate bitmap at all, which matters because the preview re-renders on every colour-picker drag. That is a larger change — `PalettePreview` would expose "draw into this surface" instead of "return a bitmap", and it is already built and reviewed. Take `ToWriteableBitmap()` now; revisit `SKXamlCanvas` only if drag responsiveness actually disappoints.
 
 ---
 
@@ -4206,7 +4168,7 @@ git commit -m "feat(app): bridge Skia bitmaps onto WriteableBitmap"
 - Modify: `src/TheOmenDen.PixelForge/MainWindow.xaml.cs`
 
 **Interfaces:**
-- Consumes: everything from Tasks 13 and 14, plus `PalettePreview` (Task 7).
+- Consumes: everything from Task 13, `PalettePreview` (Task 7), and `SkiaSharp.Views.WinUI`'s `ToWriteableBitmap()` extension (Task 14).
 - Produces: `PalettePage` (navigable), `RampStepViewModel.SwatchAutomationId` / `.HexAutomationId`.
 
 **Note on the step rows:** these are laid out with an `ItemsControl` + `DataTemplate`, not five hand-written rows bound to `Steps[0]`…`Steps[4]`. Hand-written rows would give free automation ids, but `x:Bind` on an indexer does not re-evaluate when the collection is cleared and refilled — which is exactly what selecting a different ramp does, so the editor would show stale colours. The automation ids come off the item view model instead.
@@ -4604,7 +4566,9 @@ public sealed partial class PalettePage : Page
 
         using (bitmap)
         {
-            PreviewImage.Source = SkiaImageSource.ToWriteableBitmap(bitmap);
+            // Extension from SkiaSharp.Views.WinUI (namespace SkiaSharp.Views.Windows).
+            // First-party bridge — no hand-rolled COM interop.
+            PreviewImage.Source = bitmap.ToWriteableBitmap();
         }
 
         ShowHint(visible: false);
@@ -5492,7 +5456,7 @@ Run against the spec after writing. Findings and fixes are recorded here rather 
 | `RampService` | 11 |
 | `SettingsPage` pack rows | 12 |
 | `PaletteViewModel` | 13 |
-| `SkiaImageSource` | 14 |
+| Skia→XAML bridge (package, not custom code) | 14 |
 | `PalettePage` + nav item | 15 |
 | `BatchExportViewModel` | 16 |
 | `PipelinePage` batch UI | 17 |
@@ -5524,11 +5488,11 @@ Run against the spec after writing. Findings and fixes are recorded here rather 
 - `PipelinePage` uses `SelectionMode="None"` with explicit `CheckBox` rows rather than the spec's `SelectionMode="Multiple"` — noted in Task 17, because `Multiple` would create a second selection model competing with `IsSelected`.
 - The spec's Settings automation ids (`CorePackPath` and friends) land on the `SettingsCard.Description` binding; Task 12 notes the fallback if UIA cannot reach them.
 
-**3. Type consistency.** Names used in later tasks match earlier definitions: `SheetRecipe.Overlays` (1 → 2, 4, 5), `SheetWriter.Write` (3 → 4), `BakeProgress.IsSuccess` (4 → 16), `RoostSheets.Flattened` (2 → 16), `RampStore.Read`/`Write`/`Load`/`Save` (6 → 11), `RampConversions.Hex`/`TryParseHex` (6 → 13), `PalettePreview.RenderIdleRow` (7 → 15), `AppPaths.RampStoreFile` (8 → 11), `SourcePackService.Resolved` (9 → 12, 16), `PickerService.PickFolderAsync` (10 → 12, 16), `SkiaImageSource.ToWriteableBitmap` (14 → 15), `RampStepViewModel.SwatchAutomationId` (15 → 15 XAML).
+**3. Type consistency.** Names used in later tasks match earlier definitions: `SheetRecipe.Overlays` (1 → 2, 4, 5), `SheetWriter.Write` (3 → 4), `BakeProgress.IsSuccess` (4 → 16), `RoostSheets.Flattened` (2 → 16), `RampStore.Read`/`Write`/`Load`/`Save` (6 → 11), `RampConversions.Hex`/`TryParseHex` (6 → 13), `PalettePreview.RenderIdleRow` (7 → 15), `AppPaths.RampStoreFile` (8 → 11), `SourcePackService.Resolved` (9 → 12, 16), `PickerService.PickFolderAsync` (10 → 12, 16), `SKBitmap.ToWriteableBitmap()` from SkiaSharp.Views.WinUI (14 → 15), `RampStepViewModel.SwatchAutomationId` (15 → 15 XAML).
 
 **4. Known risks carried into implementation.**
 
-- `IBufferByteAccess` marshalling under CsWinRT is the least certain thing in the plan. Task 14 names the fallback.
+- ~~`IBufferByteAccess` marshalling under CsWinRT~~ **RESOLVED.** Task 14 was rewritten to use `SkiaSharp.Views.WinUI`'s first-party `ToWriteableBitmap()`. No hand-rolled COM interop remains, and the plan's least-certain element is gone.
 - `RecipeBaker.Finish` gains a parameter change (`Optional<SkinRamp>` → `SheetRecipe`) in Task 1. It is private, so no external caller breaks.
 - Task 7 refactors `RecipeBaker.Bake` to call the new `AssembleLayers`. Task 1's tests are the regression guard and must still pass.
 - A full "Both" run is 79 sheets. Task 18 Step 5 is the memory check.
