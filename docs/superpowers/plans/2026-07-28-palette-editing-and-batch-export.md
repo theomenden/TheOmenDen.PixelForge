@@ -3098,7 +3098,9 @@ git commit -m "feat(app): add packaged-safe folder and file pickers"
 - Produces:
   - `RampService.Ramps` → `ObservableCollection<SkinRamp>` — **the single source**, built-ins first, wrapped by Task 13's `AdvancedCollectionView`
   - `RampService.Custom` → `IEnumerable<SkinRamp>` (computed: everything in `Ramps` that is not built-in)
-  - `RampService.IsBuiltIn(SkinRamp)` → `bool` — reads `SkinRamps.All` directly
+  - *(no `IsBuiltIn` on the service)* — the predicate moved to Core as `SkinRamps.IsBuiltIn(SkinRamp)`
+
+  **Why it moved.** "Is this ramp one of the shipped seven" is a fact about `SkinRamps`, not about app state — it touches no service, store, logger or user collection. As a member of `RampService` it kept tripping CA1822 (correctly), and both escapes were wrong: suppressing the analyzer preserved a member that did not belong, and marking it `static` on the service breaks instance-qualified callers with CS0176. On `SkinRamps` it is legitimately static on a legitimately static class, and it is unit-testable in Core for the first time.
 
   **A `BuiltIn` property was originally listed here and has been removed from the contract.** It had no consumer, and as a pure passthrough to static data it tripped CA1822, which was then suppressed to keep it. Making it `static` instead is *not* a fix: C# rejects `_ramps.BuiltIn` with **CS0176** (instance access to a static member), so it would break the first caller and any `x:Bind`. `IsBuiltIn` uses `SkinRamps.All` directly and nothing else needs the surface.
   - `RampService.Load()` → `Result<int, RampFailure>`
@@ -3159,8 +3161,7 @@ public sealed class RampService(ILogger<RampService> logger)
         }
     }
 
-    public bool IsBuiltIn(SkinRamp ramp) =>
-        BuiltIn.AsSpan().Any(r => string.Equals(r.Name, ramp.Name, StringComparison.OrdinalIgnoreCase));
+    // IsBuiltIn lives on SkinRamps (Core) — see the Interfaces note above.
 
     public Result<int, RampFailure> Load()
     {
@@ -3834,7 +3835,7 @@ public sealed partial class PaletteViewModel : ObservableObject
         }
     } = string.Empty;
 
-    public bool IsBuiltInSelected => SelectedRamp is not null && _ramps.IsBuiltIn(SelectedRamp);
+    public bool IsBuiltInSelected => SelectedRamp is not null && SkinRamps.IsBuiltIn(SelectedRamp);
 
     public bool IsEditable => SelectedRamp is not null && !IsBuiltInSelected;
 
