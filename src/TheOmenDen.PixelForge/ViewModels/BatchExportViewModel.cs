@@ -246,7 +246,9 @@ public sealed partial class BatchExportViewModel : ObservableObject
     {
         foreach (var item in items)
         {
-            if (name == item.Name || name.StartsWith(item.Name + "_", StringComparison.Ordinal) || name.EndsWith("_" + item.Name, StringComparison.Ordinal))
+            if (string.Equals(name, item.Name, StringComparison.Ordinal)
+                || name.StartsWith(item.Name + "_", StringComparison.Ordinal)
+                || name.EndsWith("_" + item.Name, StringComparison.Ordinal))
             {
                 // Sticky failures: a flattened body/hair row is written by up to nine pairs, so a
                 // later success must not paper over an earlier failure on the same row.

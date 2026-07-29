@@ -29,7 +29,8 @@ public sealed class ClipIndexTests
     {
         var walkSouth = ClipIndex.Rows
             .AsSpan()
-            .Where(static row => row.Clip == "walk" && row.Facing == "south")
+            .Where(static row => string.Equals(row.Clip, "walk", StringComparison.Ordinal)
+                && string.Equals(row.Facing, "south", StringComparison.Ordinal))
             .OrderBy(static row => row.FrameIndex)
             .ToArray();
 

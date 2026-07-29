@@ -10,7 +10,7 @@ namespace TheOmenDen.PixelForge.Core.Tests.Spritesheets;
 public sealed class GeneratorClipsTests
 {
     private static GeneratorClip Clip(string name)
-        => GeneratorClips.All.AsSpan().First(clip => clip.Name == name);
+        => GeneratorClips.All.AsSpan().First(clip => string.Equals(clip.Name, name, StringComparison.Ordinal));
 
     [Fact]
     public void All_HasTheTwelveGeneratorAnimations() => Assert.Equal(12, GeneratorClips.All.Length);
@@ -41,7 +41,7 @@ public sealed class GeneratorClipsTests
     {
         foreach (var clip in GeneratorClips.All)
         {
-            Assert.Equal(clip.Name == "climb", clip.ReverseDrawOrder);
+            Assert.Equal(string.Equals(clip.Name, "climb", StringComparison.Ordinal), clip.ReverseDrawOrder);
         }
     }
 

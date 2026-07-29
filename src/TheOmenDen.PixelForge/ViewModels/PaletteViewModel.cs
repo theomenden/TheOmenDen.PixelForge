@@ -72,7 +72,7 @@ public sealed partial class PaletteViewModel : ObservableObject
         get => field;
         set
         {
-            if (field == value)
+            if (string.Equals(field, value, StringComparison.Ordinal))
             {
                 return;
             }

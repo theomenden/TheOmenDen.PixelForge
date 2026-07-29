@@ -19,7 +19,7 @@ public sealed class PalettePreviewTests : IDisposable
     {
         foreach (var clip in SheetLayout.Clips.AsSpan())
         {
-            if (clip.Name == "idle")
+            if (string.Equals(clip.Name, "idle", StringComparison.Ordinal))
             {
                 return clip.SourceColumn;
             }

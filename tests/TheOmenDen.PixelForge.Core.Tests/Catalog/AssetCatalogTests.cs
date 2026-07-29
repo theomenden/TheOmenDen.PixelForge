@@ -93,8 +93,8 @@ public sealed class AssetCatalogTests : IDisposable
         var hair = catalog.Partials(AssetSlot.Hair);
 
         Assert.Equal(WrittenCount(AssetSlot.Hair), hair.Length);
-        Assert.Contains(hair, p => p.Base == "hair13" && p.Pack == ElementsPack.CharacterExpansion1);
-        Assert.Contains(hair, p => p.Base == "hair22" && p.Pack == ElementsPack.CharacterExpansion2);
+        Assert.Contains(hair, p => string.Equals(p.Base, "hair13", StringComparison.Ordinal) && p.Pack == ElementsPack.CharacterExpansion1);
+        Assert.Contains(hair, p => string.Equals(p.Base, "hair22", StringComparison.Ordinal) && p.Pack == ElementsPack.CharacterExpansion2);
     }
 
     [Fact]
@@ -153,9 +153,9 @@ public sealed class AssetCatalogTests : IDisposable
         var catalog = ScanOrFail(BuildPacks());
         var names = catalog.Partials(AssetSlot.Weapon).AsSpan().Select(static p => p.Base).ToArray();
 
-        Assert.Contains("bow1arrow1", names);
-        Assert.Contains("shield1L", names);
-        Assert.Contains("daggers", names);
+        Assert.Contains("bow1arrow1", names, StringComparer.Ordinal);
+        Assert.Contains("shield1L", names, StringComparer.Ordinal);
+        Assert.Contains("daggers", names, StringComparer.Ordinal);
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public sealed class AssetCatalogTests : IDisposable
         Assert.Equal(0, variants[0].Variant);
 
         // hair10 shares hair1's leading characters, so a prefix match would sweep it in here.
-        Assert.DoesNotContain(variants, p => p.Base == "hair10");
+        Assert.DoesNotContain(variants, p => string.Equals(p.Base, "hair10", StringComparison.Ordinal));
         Assert.All(catalog.VariantsOf(AssetSlot.Hair, "hair10"), p => Assert.Equal("hair10", p.Base));
     }
 
