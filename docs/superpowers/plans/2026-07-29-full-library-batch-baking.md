@@ -41,6 +41,8 @@ Every task's requirements implicitly include this section.
 
 1. **A `<see cref="..."/>` to a type that does not exist yet is a build error, not a warning.** `GenerateDocumentationFile` makes cref resolution live, and `TreatWarningsAsErrors` promotes CS1574. Because tasks land in dependency order, a doc comment written in an early task **must not** cref a type an later task creates. Write it as prose instead, and let the task that introduces the type convert the prose back into a cref. Known instances: `GeneratorClips` wants to cref `SheetGeometry.Full` (Task 5), and `ClipIndex` wants the same.
 2. **`IComparable<T>` without the relational operators is a build error.** CA1036 is escalated, so any type implementing `IComparable<T>` must also define `<`, `<=`, `>` and `>=`. Define them as expression-bodied forwarders to `CompareTo` so the comparison has exactly one definition.
+3. **A cref to an *overloaded* method is `CS0419` — also a build error.** `<see cref="SKColorFilter.CreateTable"/>` is ambiguous. Cref the type and name the method in `<c>`: `<see cref="SKColorFilter"/>'s <c>CreateTable</c>`. Only use a member cref when the member has exactly one signature.
+4. **`InternalsVisibleTo` on `Core` cannot be used.** Adding it exposes Core's ZLinq-generated *internal* `ZLinqDropInExtensions` to the test assembly, which has its own, producing 20+ `CS0121: The call is ambiguous` errors at every drop-in `.Where`/`.Select`/`.First` call site — in files unrelated to whatever change added it. **A helper that tests need must be `public`**, with a `<remarks>` explaining that its visibility is a testability decision rather than an invitation. `GlobalUsings.cs` carries a comment recording this; do not "tidy" it away.
 
 **Test baseline:** the suite stood at **93 passing tests** when this plan was written. Any step below that says "45 existing tests" is stale — the number that matters is that nothing regresses.
 
@@ -79,6 +81,14 @@ dotnet test tests/TheOmenDen.PixelForge.Core.Tests/TheOmenDen.PixelForge.Core.Te
 ```
 
 Both must be green before the commit. Do not proceed to the next task on a red build.
+
+**Quality gates — two levels, deliberately not the same level.**
+
+*Per task, inside the agent, before its commit:* apply `dotnet-claude-kit:modern-csharp` as a **review lens** over the code that task just wrote. It is a reading pass, not a mutation pipeline, so it composes with feature work. Check the new code actually uses: primary constructors for dependency capture, collection expressions `[]` including spreads, `readonly record struct` for small value types, the `field` keyword instead of a hand-rolled backing field, `required`/`init` to make illegal states unrepresentable, switch expressions over switch statements, list and property patterns over manual indexing, raw string literals for embedded text, and `Span<T>`/`ReadOnlySpan<T>` in pixel and parsing paths. **The one place this project overrides that skill: `var` everywhere, including built-in types** — the skill says "explicit type when not obvious", but `.editorconfig` makes an explicit type build error IDE0007 here.
+
+*Between waves, on merged `main`, with no agent running:* run `dotnet-claude-kit:de-sloppify`. Its own guidance is that cleanup commits stay pure and never mix with feature work, and its Step 1 (`dotnet format`) touches every file — so it MUST NOT run inside a task, and MUST NOT run while a parallel agent holds a worktree. Both would guarantee merge conflicts. Use the skill's **"After large feature merge"** selection: **Steps 1-4** (format → unused usings → analyzer warnings → dead code), each its own commit, with `dotnet build` + `dotnet test` verified between steps. Steps 5-7 (TODOs, sealing, `CancellationToken` propagation) are worth a single full pass at the end of the plan rather than per wave.
+
+Dead-code removal (Step 4) needs its safety check honoured here specifically: this repo resolves Serilog sinks reflectively and registers services by convention in `App.xaml.cs`, so grep before deleting anything Roslyn calls unreachable.
 
 ---
 
@@ -1676,6 +1686,17 @@ git commit -m "perf(core): vectorise the recolour and drop the per-pixel diction
 - Produces: `AssetLayer(FullPath Path, bool IsSkin)` (`readonly record struct`); `SheetGeometry` enum (`Curated = 0`, `Full = 1`); reshaped `SheetRecipe` with `Name`, `ImmutableArray<AssetLayer> Layers`, `Optional<SkinRamp> Tone`, `SheetGeometry Geometry`; `RecipeBaker.AssembleLayers(SheetRecipe) -> Result<SKBitmap, BakeFailure>` (now applies per-layer recolour); `RoostSheets.Bodies/Hair/All(SourcePacks)` unchanged in shape.
 
 > **Deleted in this task:** `SheetRecipe.Overlays`, `RecipeBaker.ApplyOverlays`, `RoostSheets.Flattened`, and `RecipeBakerOverlayTests`. Do not preserve them behind a flag — per-layer recolour makes the problem they solved impossible to have.
+
+> **Also in this task: restore four deferred cref references.** Tasks 6 and 7 landed before `SheetGeometry` existed, and a cref to a missing type is CS1574 → a build error here, so each wrote prose instead. Now that this task creates `SheetGeometry`, convert them back:
+>
+> | File | What to restore |
+> |---|---|
+> | `Core/Spritesheets/GeneratorClips.cs` | class `<remarks>` — "the full sheet geometry, which emits the raw 23x4 assembly" → `<see cref="SheetGeometry.Full"/>` |
+> | `Core/Spritesheets/ClipIndex.cs` | class `<summary>` — "a full-geometry sheet — the raw 23x4 assembly —" → `<see cref="SheetGeometry.Full"/>` |
+> | `Core/Baking/BatchManifestRow.cs` | `Geometry` property doc — "the curated Corvus sheet, or the full raw 23x4 assembly" → `<see cref="SheetGeometry"/>` |
+> | `tests/.../Baking/BatchManifestTests.cs` | `Row` helper — the `"Curated"` string literal → `nameof(SheetGeometry.Curated)`, and drop the comment explaining why it was a literal |
+>
+> Keep the surrounding sentences readable; the prose was written to stand on its own, so restoring a cref may mean rewording rather than a literal substitution.
 
 - [ ] **Step 1: Write the failing test**
 
