@@ -54,6 +54,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Used directly by app-layer services: Optional<T> and FullPath appear in
+         SourcePackService's public surface. Declared explicitly rather than relied on
+         transitively through the Core ProjectReference. -->
+    <PackageReference Include="DotNext" />
+    <PackageReference Include="Meziantou.Framework.FullPath" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- ZLinq replaces System.Linq (see GlobalUsings.cs for the drop-in attribute). -->
     <PackageReference Include="ZLinq" />
     <PackageReference Include="ZLinq.DropInGenerator" PrivateAssets="all" />
