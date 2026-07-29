@@ -8,12 +8,20 @@ namespace TheOmenDen.PixelForge.Core.Baking;
 /// <summary>
 /// Runs many recipes and writes each result to disk.
 /// <para>
-/// <c>Parallel.ForEachAsync</c> is what bounds this. DotNext's <c>TaskCompletionPipe&lt;T&gt;</c>
-/// was the obvious candidate — it streams results in completion order and carries a correlation
-/// token — but it does not bound concurrency: every task added starts immediately. A full
-/// flattened run is 63 sheets, each decoding four 828 KiB partials, so unbounded start is the
-/// memory failure mode. <c>Parallel.ForEachAsync</c> bounds <em>and</em> reports on completion,
-/// so no throttle primitive is needed and none of the banned synchronisation types appear.
+/// <c>Parallel.ForEachAsync</c> is what bounds this run. The work is synchronous and CPU-bound —
+/// <see cref="RecipeBaker.Bake"/> decodes, composites and encodes on the calling thread — so the
+/// BCL's data-parallel primitive is the right shape: it partitions, schedules onto the thread
+/// pool, bounds by <c>MaxDegreeOfParallelism</c>, and threads cancellation through
+/// <see cref="ParallelOptions"/>, without wrapping each bake in a <c>Task.Run</c>.
+/// </para>
+/// <para>
+/// DotNext.Threading was checked first and does offer bounded alternatives: <c>TaskQueue&lt;T&gt;</c>
+/// bounds via <c>EnqueueAsync</c>, and <c>AsyncSharedLock</c> is this project's sanctioned throttle
+/// in place of <c>SemaphoreSlim(n, n)</c>. Both are the better tool when the throttled work is
+/// genuinely async; feeding either one here would mean wrapping synchronous bakes in
+/// <c>Task.Run</c> for no gain. <c>TaskCompletionPipe&lt;T&gt;</c> is the one that would be wrong
+/// outright — it starts every task the moment it is added, and a full run is 79 sheets each
+/// decoding four 828 KiB partials.
 /// </para>
 /// <para>
 /// A failed recipe is reported and the run continues. One missing partial must not cost the
