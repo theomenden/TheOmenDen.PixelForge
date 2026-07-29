@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Collections.Immutable;
 using CommunityToolkit.Diagnostics;
 using SkiaSharp;
@@ -31,32 +30,6 @@ public sealed record SkinRamp
     public SKColor BaseTone => Steps[3];
 
     /// <summary>
-    /// Substitution table taking <paramref name="source"/>'s colours to this ramp's, keyed on
-    /// packed RGB. Identity when this ramp is the source.
-    /// <para>
-    /// Superseded by <see cref="SubstitutionFrom(SkinRamp)"/>, which returns the packed-pixel
-    /// <see cref="RampSubstitution"/> the vectorised recolour consumes. This member exists only
-    /// while the dictionary-driven <see cref="Baking.SheetBaker.Recolor"/> is still in place and
-    /// is deleted with it — do not add callers.
-    /// </para>
-    /// </summary>
-    public FrozenDictionary<uint, SKColor> LegacySubstitutionFrom(SkinRamp source)
-    {
-        Guard.IsNotNull(source);
-        Guard.IsEqualTo(source.Steps.Length, SkinRamps.StepCount);
-        Guard.IsEqualTo(Steps.Length, SkinRamps.StepCount);
-
-        var map = new Dictionary<uint, SKColor>(SkinRamps.StepCount);
-
-        for (var i = 0; i < SkinRamps.StepCount; i++)
-        {
-            map[Pack(source.Steps[i])] = Steps[i];
-        }
-
-        return map.ToFrozenDictionary();
-    }
-
-    /// <summary>
     /// Substitution table taking <paramref name="source"/>'s colours to this ramp's, as packed
     /// pixels ready for the vectorised recolour. Identity when this ramp <em>is</em>
     /// <paramref name="source"/>.
@@ -84,8 +57,13 @@ public sealed record SkinRamp
     }
 
     /// <summary>
-    /// Packs a colour's RGB into a lookup key. Alpha is deliberately ignored — this is a
-    /// dictionary key, not a colour conversion.
+    /// Packs a colour's RGB into a comparison key. Alpha is deliberately ignored — this identifies
+    /// a colour, it is not a colour conversion, and it is what the palette editor and the tests
+    /// compare two <see cref="SKColor"/> values by.
+    /// <para>
+    /// Not what the recolour consumes: that walks pixel memory and needs
+    /// <see cref="PackedRgba"/>'s opposite byte order.
+    /// </para>
     /// </summary>
     public static uint Pack(SKColor color) => ((uint)color.Red << 16) | ((uint)color.Green << 8) | color.Blue;
 
@@ -94,7 +72,7 @@ public sealed record SkinRamp
     /// <para>
     /// The byte order is the trap. RGBA8888 lays out R,G,B,A in ascending addresses, so reading
     /// that memory as a little-endian <see cref="uint"/> yields <c>0xAABBGGRR</c> — red in the
-    /// <em>low</em> byte. <see cref="Pack"/>'s dictionary key is the opposite, <c>0xRRGGBB</c>.
+    /// <em>low</em> byte. <see cref="Pack"/>'s comparison key is the opposite, <c>0xRRGGBB</c>.
     /// Confusing the two swaps red and blue in every baked sheet, and the round-trip verification
     /// would not catch it because it compares an encode against its own decode.
     /// </para>
