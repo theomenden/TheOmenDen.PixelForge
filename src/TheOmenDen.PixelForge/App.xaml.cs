@@ -67,6 +67,7 @@ public partial class App : Application
                 retainedFileCountLimit: 14)));
 
         builder.Services.AddSingleton<IThemeService, ThemeService>();
+        builder.Services.AddSingleton<SourcePackService>();
         builder.Services.AddTransient<SettingsViewModel>();
 
         return builder.Build();
@@ -79,6 +80,8 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         Log.Information("PixelForge starting. Logs: {LogDirectory}", AppPaths.Logs);
+
+        Services.GetRequiredService<SourcePackService>().Load();
 
         _window = new MainWindow();
         _window.Closed += OnMainWindowClosed;
