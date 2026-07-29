@@ -4090,8 +4090,12 @@ public sealed partial class PaletteViewModel : ObservableObject
 In `App.xaml.cs` `BuildHost`:
 
 ```csharp
-        builder.Services.AddTransient<PaletteViewModel>();
+        builder.Services.AddSingleton<PaletteViewModel>();
 ```
+
+**Singleton, not transient — and this is a correctness requirement, not a preference.** The constructor subscribes to `RampService.Ramps` (a singleton's collection) and never unsubscribes. `NavigationCacheMode` is set nowhere in this app, so `Frame.Navigate` builds a new page — and therefore resolves a new transient view model — on **every** visit. A transient VM here would be pinned alive by the singleton's event for the life of the process, one per visit, each still raising `OnPropertyChanged` at a dead page. Task 12 shipped exactly that bug and it was caught in review.
+
+Singleton is safe for this type: its state is the selected ramp and the in-progress step edits, and persisting those across a navigation is desirable rather than surprising — leaving the page and coming back should not silently discard an unsaved edit. The page's `PalettePreview` is owned by the code-behind and disposed on `Unloaded`, so nothing unmanaged is held by the singleton.
 
 - [ ] **Step 3: Build**
 
@@ -5019,8 +5023,12 @@ public sealed partial class BatchExportViewModel : ObservableObject
 In `App.xaml.cs` `BuildHost`:
 
 ```csharp
-        builder.Services.AddTransient<BatchExportViewModel>();
+        builder.Services.AddSingleton<BatchExportViewModel>();
 ```
+
+**Singleton, not transient — for two independent reasons.** First, the same leak as Task 12: this VM subscribes to `SourcePackService.Changed` on a singleton and never unsubscribes, so a transient instance would be pinned alive by that event on every navigation.
+
+Second, and more important here: **an export in flight must survive navigation.** A full run is 79 sheets. If the user starts an export and switches to the Palette page to look at something, a transient VM would be abandoned mid-run with its `CancellationToken` orphaned and its progress reporting going nowhere, while the `Parallel.ForEachAsync` kept writing files that nothing was tracking. Singleton means navigating away and back rejoins the same run, with progress intact.
 
 - [ ] **Step 3: Build**
 
