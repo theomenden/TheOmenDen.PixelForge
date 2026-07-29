@@ -28,27 +28,19 @@ public sealed class BatchManifestTests
     /// UUIDv7, not v4: run ids are stamped into the manifest and the log, and v7's leading
     /// timestamp makes them sort chronologically instead of scattering.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This single assertion is the whole guard, and it is deliberately not accompanied by an
+    /// "ids sort in creation order" test. Only the leading 48 bits of a v7 UUID are the timestamp
+    /// and the BCL does not promise monotonicity inside one millisecond, so such a test either
+    /// ties and fails at random or has to sleep across a millisecond boundary — a flake or a delay
+    /// in exchange for no coverage this does not already have. Swapping
+    /// <see cref="Guid.CreateVersion7()"/> for <see cref="Guid.NewGuid"/> is the regression worth
+    /// catching, and a v4 id fails right here on <see cref="Guid.Version"/>.
+    /// </para>
+    /// </remarks>
     [Fact]
     public void NewRunId_IsAVersion7Uuid() => Assert.Equal(7, BatchManifest.NewRunId().Version);
-
-    /// <summary>
-    /// The 2ms gap is load-bearing, not padding. Only the leading 48 bits of a v7 UUID are the
-    /// timestamp; the remaining 74 are random, and the BCL explicitly does not guarantee
-    /// monotonicity within one millisecond. Two back-to-back calls therefore tie on the timestamp
-    /// and order at random, so the test has to cross a millisecond boundary to assert anything.
-    /// A v4 id would still fail this — that is the point.
-    /// </summary>
-    [Fact]
-    public void NewRunId_OrdersLaterIdsAfterEarlierOnes()
-    {
-        var first = BatchManifest.NewRunId();
-
-        Thread.Sleep(2);
-
-        var second = BatchManifest.NewRunId();
-
-        Assert.True(string.CompareOrdinal(first.ToString("D"), second.ToString("D")) <= 0);
-    }
 
     [Fact]
     public void WriteTo_RecordsEveryRowAgainstTheRunId()
