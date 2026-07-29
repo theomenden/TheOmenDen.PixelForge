@@ -37,6 +37,13 @@ Every task's requirements implicitly include this section.
 - `<inheritdoc />` on interface implementations and overrides rather than a copied summary that will drift.
 - `<returns>` on any member whose return value is not obvious from the summary, especially the `Result<T, TError>` and `Optional<T>` returns, which must say what each failure means.
 
+**Two doc traps confirmed the hard way during implementation — read these before writing a doc comment:**
+
+1. **A `<see cref="..."/>` to a type that does not exist yet is a build error, not a warning.** `GenerateDocumentationFile` makes cref resolution live, and `TreatWarningsAsErrors` promotes CS1574. Because tasks land in dependency order, a doc comment written in an early task **must not** cref a type an later task creates. Write it as prose instead, and let the task that introduces the type convert the prose back into a cref. Known instances: `GeneratorClips` wants to cref `SheetGeometry.Full` (Task 5), and `ClipIndex` wants the same.
+2. **`IComparable<T>` without the relational operators is a build error.** CA1036 is escalated, so any type implementing `IComparable<T>` must also define `<`, `<=`, `>` and `>=`. Define them as expression-bodied forwarders to `CompareTo` so the comparison has exactly one definition.
+
+**Test baseline:** the suite stood at **93 passing tests** when this plan was written. Any step below that says "45 existing tests" is stale — the number that matters is that nothing regresses.
+
 **Library-first (standing rule 0)**
 - Before writing anything non-trivial, enumerate the relevant package's public surface and state what was found — including when it genuinely lacks the method.
 - ZLinq replaces System.Linq. `ImmutableArray<T>` is **not** covered by the drop-in generator — call `.AsSpan()` first or the chain silently binds to System.Linq.
