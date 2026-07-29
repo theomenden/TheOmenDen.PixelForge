@@ -16,6 +16,20 @@ public sealed partial class RampStepViewModel(int index, SKColor color) : Observ
 
     public string Label => $"Step {Index + 1}";
 
+    /// <summary>
+    /// Automation ids come off the item, not the template: a DataTemplate cannot give each
+    /// generated row a distinct id, and ui-tests.ps1 addresses these by name.
+    /// </summary>
+    public string SwatchAutomationId => $"SwatchStep{Index + 1}";
+
+    public string HexAutomationId => $"HexStep{Index + 1}";
+
+    /// <summary>
+    /// Accessible name for the hex box. A plain x:Bind cannot mix a markup extension with literal
+    /// text in one attribute value, so the " hex" suffix is computed here instead.
+    /// </summary>
+    public string HexFieldName => $"{Label} hex";
+
     /// <summary>Raised when either representation changes, so the preview can re-render.</summary>
     public event EventHandler? Changed;
 

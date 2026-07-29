@@ -62,6 +62,14 @@
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem
+                    AutomationProperties.AutomationId="NavPalette"
+                    Content="Palette"
+                    Tag="Palette">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE790;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem
                     AutomationProperties.AutomationId="NavPipeline"
                     Content="Pipeline"
                     Tag="Pipeline">

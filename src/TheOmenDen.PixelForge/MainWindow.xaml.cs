@@ -72,6 +72,7 @@ public sealed partial class MainWindow : Window
         var page = (args.SelectedItem as NavigationViewItem)?.Tag switch
         {
             "Assets" => typeof(AssetsPage),
+            "Palette" => typeof(PalettePage),
             "Pipeline" => typeof(PipelinePage),
             _ => typeof(CanvasPage),
         };
