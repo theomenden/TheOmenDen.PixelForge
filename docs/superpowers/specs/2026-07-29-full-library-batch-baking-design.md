@@ -342,9 +342,20 @@ the manifests, the parallel run — is a package that is already referenced.
   output directory; `sheets.csv` is the authoritative index if a name is ever truncated.
 - **Per-batch weapon-recolour toggle.** One data-driven default, one line to change.
 
-## Open risk
+## Accepted trade-offs
 
-`bottom10` (19.8%) and `bottom11` (7.6%) carry ramp pixels that may be tan leather rather than bare
-skin. Being on a skin-bearing slot, they will be recoloured with the tone. Same class of risk as the
-weapon call but the opposite direction; if it shows up visually, the fix is a per-partial exclusion
-list, not a slot-level change.
+Both confirmed 2026-07-29. Neither is an open question; they are recorded so the reasoning survives.
+
+**Weapons keep their authored colour.** `AssetSlot.IsSkinBearing` is false for `Weapon`, so a
+Bone-toned character carries a tan wooden bow and a Green-toned one a brown leather shield. This
+diverges from the Elements generator, which applies its `PaletteSwaps` globally. The evidence is that
+hands are not on the weapon layer at all — `arrow1` is 10.7% ramp with no hand on it, `shield1L` is
+22.1%, while `sword1`, `sword2`, `sword4`, `sword5`, `daggerL`, `daggerR`, `gun1` and `wand1` are 0%.
+Those hexes are wood, leather and shield trim.
+
+**Tan garments on skin-bearing slots will take the tone.** `bottom10` (19.8% ramp) and `bottom11`
+(7.6%) may be tan leather rather than bare legs; `bottom` is a skin-bearing slot, so they are
+recoloured along with the skin. Accepted deliberately — the alternative is a per-partial exclusion
+list maintained by eye against 156 bases, which is more upkeep than the artefact is worth. The escape
+hatch remains one flag: `AssetLayer.IsSkin` is seeded from the slot but carried per layer, so a single
+partial can be excluded later without touching the baker.
