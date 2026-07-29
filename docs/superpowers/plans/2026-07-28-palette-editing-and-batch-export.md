@@ -3102,7 +3102,7 @@ git commit -m "feat(app): add packaged-safe folder and file pickers"
 
   **Why it moved.** "Is this ramp one of the shipped seven" is a fact about `SkinRamps`, not about app state — it touches no service, store, logger or user collection. As a member of `RampService` it kept tripping CA1822 (correctly), and both escapes were wrong: suppressing the analyzer preserved a member that did not belong, and marking it `static` on the service breaks instance-qualified callers with CS0176. On `SkinRamps` it is legitimately static on a legitimately static class, and it is unit-testable in Core for the first time.
 
-  **A `BuiltIn` property was originally listed here and has been removed from the contract.** It had no consumer, and as a pure passthrough to static data it tripped CA1822, which was then suppressed to keep it. Making it `static` instead is *not* a fix: C# rejects `_ramps.BuiltIn` with **CS0176** (instance access to a static member), so it would break the first caller and any `x:Bind`. `IsBuiltIn` uses `SkinRamps.All` directly and nothing else needs the surface.
+  **A `BuiltIn` property was originally listed here and has been removed from the contract.** It had no consumer, and as a pure passthrough to static data it tripped CA1822, which was then suppressed to keep it. Making it `static` instead is *not* a fix: C# rejects `_ramps.BuiltIn` with **CS0176** (instance access to a static member), so it would break the first caller and any `x:Bind`. Nothing else needed the surface. (`IsBuiltIn` subsequently moved to Core for the same underlying reason — see above.)
   - `RampService.Load()` → `Result<int, RampFailure>`
   - `RampService.Save()` → `Result<int, RampFailure>`
   - `RampService.Add(SkinRamp)` / `Replace(string name, SkinRamp)` / `Remove(string name)` → `Result<int, RampFailure>`
@@ -3153,7 +3153,7 @@ public sealed class RampService(ILogger<RampService> logger)
         {
             foreach (var ramp in Ramps)
             {
-                if (!IsBuiltIn(ramp))
+                if (!SkinRamps.IsBuiltIn(ramp))
                 {
                     yield return ramp;
                 }
@@ -3177,7 +3177,7 @@ public sealed class RampService(ILogger<RampService> logger)
         // Drop only the customs — the built-ins stay put so the view never sees an empty list.
         for (var i = Ramps.Count - 1; i >= 0; i--)
         {
-            if (!IsBuiltIn(Ramps[i]))
+            if (!SkinRamps.IsBuiltIn(Ramps[i]))
             {
                 Ramps.RemoveAt(i);
             }
@@ -3257,7 +3257,7 @@ public sealed class RampService(ILogger<RampService> logger)
 
         foreach (var ramp in ramps)
         {
-            if (IsBuiltIn(ramp))
+            if (SkinRamps.IsBuiltIn(ramp))
             {
                 // A built-in's name is taken. Skip rather than fail the whole import.
                 logger.LogInformation("Skipped imported ramp {Name}: name is a built-in", ramp.Name);
@@ -3290,7 +3290,7 @@ public sealed class RampService(ILogger<RampService> logger)
     {
         for (var i = 0; i < Ramps.Count; i++)
         {
-            if (!IsBuiltIn(Ramps[i]) && string.Equals(Ramps[i].Name, name, StringComparison.OrdinalIgnoreCase))
+            if (!SkinRamps.IsBuiltIn(Ramps[i]) && string.Equals(Ramps[i].Name, name, StringComparison.OrdinalIgnoreCase))
             {
                 return i;
             }
@@ -3312,7 +3312,7 @@ public sealed class RampService(ILogger<RampService> logger)
             return RampFailure.WrongStepCount;
         }
 
-        if (IsBuiltIn(ramp))
+        if (SkinRamps.IsBuiltIn(ramp))
         {
             return RampFailure.DuplicateName;
         }
