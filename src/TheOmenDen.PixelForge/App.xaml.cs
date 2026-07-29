@@ -70,7 +70,7 @@ public partial class App : Application
         builder.Services.AddSingleton<SourcePackService>();
         builder.Services.AddSingleton<RampService>();
         builder.Services.AddSingleton<PickerService>();
-        builder.Services.AddTransient<SettingsViewModel>();
+        builder.Services.AddSingleton<SettingsViewModel>();
 
         return builder.Build();
     }

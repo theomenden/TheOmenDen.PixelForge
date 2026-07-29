@@ -52,7 +52,10 @@
                 Message="Time Elements packs are licensed art and are not shipped with PixelForge. Point each row at that pack's assets folder."
                 Severity="Informational" />
 
-            <controls:SettingsCard Description="{x:Bind ViewModel.CorePackPath, Mode=OneWay}" Header="Core pack">
+            <controls:SettingsCard
+                AutomationProperties.AutomationId="CorePackPath"
+                Description="{x:Bind ViewModel.CorePackPath, Mode=OneWay}"
+                Header="Core pack">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE8B7;" />
                 </controls:SettingsCard.HeaderIcon>
@@ -63,7 +66,10 @@
                     Content="Browse" />
             </controls:SettingsCard>
 
-            <controls:SettingsCard Description="{x:Bind ViewModel.Expansion1PackPath, Mode=OneWay}" Header="Character Expansion 1">
+            <controls:SettingsCard
+                AutomationProperties.AutomationId="Expansion1PackPath"
+                Description="{x:Bind ViewModel.Expansion1PackPath, Mode=OneWay}"
+                Header="Character Expansion 1">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE8B7;" />
                 </controls:SettingsCard.HeaderIcon>
@@ -74,7 +80,10 @@
                     Content="Browse" />
             </controls:SettingsCard>
 
-            <controls:SettingsCard Description="{x:Bind ViewModel.Expansion2PackPath, Mode=OneWay}" Header="Character Expansion 2">
+            <controls:SettingsCard
+                AutomationProperties.AutomationId="Expansion2PackPath"
+                Description="{x:Bind ViewModel.Expansion2PackPath, Mode=OneWay}"
+                Header="Character Expansion 2">
                 <controls:SettingsCard.HeaderIcon>
                     <FontIcon Glyph="&#xE8B7;" />
                 </controls:SettingsCard.HeaderIcon>

@@ -61,7 +61,11 @@ public sealed partial class MainWindow : Window
         // SelectionChanged, not ItemInvoked — ItemInvoked misses programmatic selection.
         if (args.IsSettingsSelected)
         {
-            RootFrame.Navigate(typeof(SettingsPage));
+            if (RootFrame.CurrentSourcePageType != typeof(SettingsPage))
+            {
+                RootFrame.Navigate(typeof(SettingsPage));
+            }
+
             return;
         }
 
