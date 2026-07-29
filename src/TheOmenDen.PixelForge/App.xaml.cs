@@ -14,6 +14,26 @@ namespace TheOmenDen.PixelForge;
 /// </summary>
 public partial class App : Application
 {
+    /// <summary>Stamped on every event so a shared log sink can tell apps apart.</summary>
+    private const string ApplicationName = "TheOmenDen.PixelForge";
+
+    /// <summary>The date is filled in by <see cref="RollingInterval.Day"/> at the trailing dash.</summary>
+    private const string RollingLogFileName = "pixelforge-.log";
+
+    private const long RollingLogSizeLimitBytes = 32L * 1024 * 1024;
+
+    private const int RetainedLogFileCount = 14;
+
+    /// <summary>Not rolled by date: a crash is rare and wants to stay findable.</summary>
+    private const string FatalLogFileName = "pixelforge-fatal.log";
+
+    private const long FatalLogSizeLimitBytes = 8L * 1024 * 1024;
+
+    private const int RetainedFatalLogFileCount = 3;
+
+    /// <summary>Serilog.Expressions filter — <c>@l</c> is the event's level.</summary>
+    private const string FatalOnly = "@l = 'Fatal'";
+
     private readonly IHost _host;
     private Window? _window;
 
@@ -54,17 +74,29 @@ public partial class App : Application
             .ReadFrom.Configuration(builder.Configuration)
             .ReadFrom.Services(services)
             .Enrich.FromLogContext()
-            .Enrich.WithProperty("Application", "TheOmenDen.PixelForge")
+            .Enrich.WithProperty("Application", ApplicationName)
             // File sink is composed here rather than in appsettings.json because the
             // path is only resolvable at runtime (see AppPaths.Logs). Async wraps it so
             // disk writes never block the UI thread during a batch pipeline run.
             .WriteTo.Async(sink => sink.File(
                 new CompactJsonFormatter(),
-                Path.Combine(AppPaths.Logs.Value, "pixelforge-.log"),
+                Path.Combine(AppPaths.Logs.Value, RollingLogFileName),
                 rollingInterval: RollingInterval.Day,
                 rollOnFileSizeLimit: true,
-                fileSizeLimitBytes: 32L * 1024 * 1024,
-                retainedFileCountLimit: 14)));
+                fileSizeLimitBytes: RollingLogSizeLimitBytes,
+                retainedFileCountLimit: RetainedLogFileCount))
+            // Fatals also go straight to disk, synchronously and unbuffered. A crash is
+            // precisely when the async buffer above is lost: WinUI fails fast on an unhandled
+            // XAML exception, which killed the process with the Fatal still in memory and left
+            // no trace of why. This sink only ever sees Fatal events, so it costs nothing.
+            .WriteTo.Conditional(
+                FatalOnly,
+                sink => sink.File(
+                    new CompactJsonFormatter(),
+                    Path.Combine(AppPaths.Logs.Value, FatalLogFileName),
+                    rollOnFileSizeLimit: true,
+                    fileSizeLimitBytes: FatalLogSizeLimitBytes,
+                    retainedFileCountLimit: RetainedFatalLogFileCount)));
 
         builder.Services.AddSingleton<IThemeService, ThemeService>();
         builder.Services.AddSingleton<SourcePackService>();
@@ -103,7 +135,14 @@ public partial class App : Application
     }
 
     private static void OnXamlUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e)
-        => Log.Fatal(e.Exception, "Unhandled XAML exception: {Message}", e.Message);
+    {
+        Log.Fatal(e.Exception, "Unhandled XAML exception: {Message}", e.Message);
+
+        // WinUI fails fast on an unhandled XAML exception (0xC0000409), and Sinks.Async is
+        // buffered — without this flush the Fatal above dies in memory and the crash leaves no
+        // trace at all. Same reason OnDomainUnhandledException flushes.
+        Log.CloseAndFlush();
+    }
 
     private static void OnDomainUnhandledException(object sender, System.UnhandledExceptionEventArgs e)
     {
