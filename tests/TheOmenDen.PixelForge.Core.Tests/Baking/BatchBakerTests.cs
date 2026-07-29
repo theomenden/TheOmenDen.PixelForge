@@ -29,6 +29,28 @@ public sealed class BatchBakerTests : IDisposable
         }
     }
 
+    /// <summary>Cancels <paramref name="source"/> the moment the <paramref name="cancelAfter"/>-th
+    /// report arrives, so a test can assert on state mid-run rather than only at the boundary
+    /// where every counter is trivially zero.</summary>
+    private sealed class CancelingProgress(CancellationTokenSource source, int cancelAfter) : IProgress<BakeProgress>
+    {
+        private readonly Lock _gate = new();
+        private int _count;
+
+        public void Report(BakeProgress value)
+        {
+            lock (_gate)
+            {
+                _count++;
+
+                if (_count == cancelAfter)
+                {
+                    source.Cancel();
+                }
+            }
+        }
+    }
+
     private FullPath WritePartial(string name)
     {
         using var bitmap = new SKBitmap(new SKImageInfo(
@@ -161,6 +183,33 @@ public sealed class BatchBakerTests : IDisposable
         Assert.True(summary.Cancelled);
     }
 
+    /// <summary>
+    /// Cancelling before the run starts leaves every counter at zero by construction, which
+    /// cannot distinguish a correct cancellation from one that discards already-written sheets.
+    /// This cancels mid-run instead and checks the partial results survive.
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_KeepsAlreadyWrittenSheets_WhenCancelledMidRun()
+    {
+        var output = OutputDirectory();
+
+        using var cts = new CancellationTokenSource();
+
+        const int total = 6;
+        const int cancelAfter = 2;
+
+        var progress = new CancelingProgress(cts, cancelAfter);
+
+        // DOP 1 makes this deterministic: nothing else can be in flight when the token is
+        // observed, so exactly cancelAfter recipes finish before the run stops.
+        var summary = await BatchBaker.RunAsync(GoodRecipes(total), output, progress, 1, cts.Token);
+
+        Assert.True(summary.Cancelled);
+        Assert.True(summary.Succeeded >= cancelAfter,
+            $"expected at least {cancelAfter} succeeded, got {summary.Succeeded}");
+        Assert.True(Directory.GetFiles(output.Value, "*.webp").Length >= cancelAfter);
+    }
+
     [Fact]
     public async Task RunAsync_FailsEveryRecipe_WhenTheOutputDirectoryIsMissing()
     {
@@ -195,5 +244,45 @@ public sealed class BatchBakerTests : IDisposable
         Assert.Equal(0, summary.Succeeded);
         Assert.Equal(0, summary.Failed);
         Assert.False(summary.Cancelled);
+    }
+
+    /// <summary>
+    /// Proves <c>MaxDegreeOfParallelism</c> is actually wired into <c>ParallelOptions</c> rather
+    /// than merely accepted and ignored — the one property here with otherwise-zero coverage.
+    /// <para>
+    /// Recipes carry <em>descending</em> cost: the first submitted decodes the most layers, the
+    /// last submitted decodes only one. With DOP pinned to 1, only one recipe is ever in flight,
+    /// so completion order can only ever match submission order, however unequal the cost. With
+    /// the bound removed, real concurrency lets the cheap, late recipe finish well ahead of the
+    /// expensive, early one — flipping that order, which this test would then catch.
+    /// </para>
+    /// </summary>
+    [Fact]
+    public async Task RunAsync_ProcessesStrictlyInSubmissionOrder_WhenParallelismIsOne()
+    {
+        var output = OutputDirectory();
+        var progress = new CollectingProgress();
+        var layer = WritePartial("layer.png");
+
+        const int count = 6;
+        var recipes = ImmutableArray.CreateBuilder<SheetRecipe>(count);
+
+        for (var i = 0; i < count; i++)
+        {
+            var layers = ImmutableArray.CreateBuilder<FullPath>(count - i);
+
+            for (var j = 0; j < count - i; j++)
+            {
+                layers.Add(layer);
+            }
+
+            recipes.Add(new() { Name = $"sheet-{i:00}", Layers = layers.ToImmutable() });
+        }
+
+        var summary = await BatchBaker.RunAsync(
+            recipes.ToImmutable(), output, progress, 1, TestContext.Current.CancellationToken);
+
+        Assert.Equal(count, summary.Succeeded);
+        Assert.Equal([1, 2, 3, 4, 5, 6], progress.Reports.Select(static r => r.Completed).ToArray());
     }
 }

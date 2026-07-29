@@ -39,10 +39,12 @@ public static class SheetWriter
             return new(BakeFailure.OutputDirectoryUnavailable);
         }
 
-        var target = directory / (name + Extension);
-
         try
         {
+            // Combination is inside the try too: a Name with a path-invalid character (a bad
+            // recipe, not a bug) throws from the combine, not just from File.Create.
+            var target = directory / (name + Extension);
+
             using var file = File.Create(target.Value);
 
             // WriteTo ignores Position and writes the full length, which is what we want and is
@@ -51,7 +53,11 @@ public static class SheetWriter
 
             return ByteSize.FromBytes(sheet.Length);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is IOException
+            or UnauthorizedAccessException
+            or ArgumentException
+            or NotSupportedException
+            or PathTooLongException)
         {
             return new(BakeFailure.OutputWriteFailed);
         }

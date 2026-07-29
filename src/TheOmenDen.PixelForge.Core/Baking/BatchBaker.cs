@@ -20,8 +20,9 @@ namespace TheOmenDen.PixelForge.Core.Baking;
 /// in place of <c>SemaphoreSlim(n, n)</c>. Both are the better tool when the throttled work is
 /// genuinely async; feeding either one here would mean wrapping synchronous bakes in
 /// <c>Task.Run</c> for no gain. <c>TaskCompletionPipe&lt;T&gt;</c> is the one that would be wrong
-/// outright — it starts every task the moment it is added, and a full run is 79 sheets each
-/// decoding four 828 KiB partials.
+/// outright — it orders completions but never throttles starts, since the tasks handed to it
+/// are already running. A full run is 79 sheets, the 63 flattened ones each decoding four
+/// 828 KiB partials.
 /// </para>
 /// <para>
 /// A failed recipe is reported and the run continues. One missing partial must not cost the
@@ -41,7 +42,13 @@ public static class BatchBaker
 
         if (recipes.IsDefaultOrEmpty)
         {
-            return Empty(cancelled: false);
+            return new()
+            {
+                Succeeded = 0,
+                Failed = 0,
+                TotalWritten = ByteSize.FromBytes(0),
+                Cancelled = false,
+            };
         }
 
         var total = recipes.Length;
@@ -86,7 +93,7 @@ public static class BatchBaker
                 {
                     Name = recipe.Name,
                     Written = size,
-                    Failure = outcome.IsSuccessful ? default : outcome.Error,
+                    Failure = outcome.Error,
                     Completed = position,
                     Total = total,
                 });
@@ -107,14 +114,6 @@ public static class BatchBaker
             Cancelled = cancelled,
         };
     }
-
-    private static BatchSummary Empty(bool cancelled) => new()
-    {
-        Succeeded = 0,
-        Failed = 0,
-        TotalWritten = ByteSize.FromBytes(0),
-        Cancelled = cancelled,
-    };
 
     /// <summary>
     /// Bake and write one recipe. The pooled stream is disposed here so its buffer returns to

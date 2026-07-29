@@ -76,4 +76,23 @@ public sealed class SheetWriterTests : IDisposable
         Assert.False(result.IsSuccessful);
         Assert.Equal(BakeFailure.OutputDirectoryUnavailable, result.Error);
     }
+
+    /// <summary>
+    /// A path-invalid <see cref="SheetRecipe.Name"/> is bad data, not a bug — it must come back
+    /// as <see cref="BakeFailure.OutputWriteFailed"/>, the same as any other write failure, and
+    /// never escape as an unhandled exception that would abort a whole batch run.
+    /// </summary>
+    [Fact]
+    public void Write_ReportsOutputWriteFailed_WhenTheNameHasAPathInvalidCharacter()
+    {
+        using var sheet = StreamOf(1, 2, 3);
+
+        // An embedded NUL is illegal in a path on every platform, unlike most of Windows'
+        // reserved characters (':' is legal mid-name — it addresses an NTFS alternate data
+        // stream — so it does not exercise this path).
+        var result = SheetWriter.Write(_directory.FullPath, "bad\0name", sheet);
+
+        Assert.False(result.IsSuccessful);
+        Assert.Equal(BakeFailure.OutputWriteFailed, result.Error);
+    }
 }
