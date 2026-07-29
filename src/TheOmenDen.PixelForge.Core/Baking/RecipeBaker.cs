@@ -1,8 +1,11 @@
+using System.Collections.Immutable;
 using CommunityToolkit.Diagnostics;
 using DotNext;
+using Meziantou.Framework;
 using Microsoft.IO;
 using SkiaSharp;
 using TheOmenDen.PixelForge.Core.Palettes;
+using TheOmenDen.PixelForge.Core.Spritesheets;
 
 namespace TheOmenDen.PixelForge.Core.Baking;
 
@@ -61,7 +64,7 @@ public static class RecipeBaker
 
             using (assembled)
             {
-                return Finish(assembled, recipe.Recolor);
+                return Finish(assembled, recipe);
             }
         }
         finally
@@ -75,17 +78,18 @@ public static class RecipeBaker
 
     private static Result<RecyclableMemoryStream, BakeFailure> Finish(
         SKBitmap assembled,
-        Optional<SkinRamp> recolor)
+        SheetRecipe recipe)
     {
         SKBitmap? toned = null;
+        SKBitmap? overlaid = null;
 
         try
         {
             var subject = assembled;
 
-            if (recolor.TryGet(out var ramp))
+            if (recipe.Recolor.TryGet(out var ramp))
             {
-                var recolored = SheetBaker.Recolor(assembled, ramp.SubstitutionFrom(SkinRamps.Source));
+                var recolored = SheetBaker.Recolor(subject, ramp.SubstitutionFrom(SkinRamps.Source));
 
                 if (!recolored.TryGet(out toned))
                 {
@@ -93,6 +97,18 @@ public static class RecipeBaker
                 }
 
                 subject = toned;
+            }
+
+            if (!recipe.Overlays.IsDefaultOrEmpty)
+            {
+                var composited = ApplyOverlays(subject, recipe.Overlays);
+
+                if (!composited.TryGet(out overlaid))
+                {
+                    return new(composited.Error);
+                }
+
+                subject = overlaid;
             }
 
             var curation = SheetBaker.Curate(subject);
@@ -110,6 +126,72 @@ public static class RecipeBaker
         finally
         {
             toned?.Dispose();
+            overlaid?.Dispose();
         }
     }
+
+    /// <summary>
+    /// Draws overlay partials over an already-recoloured assembly. Compositing happens on a
+    /// premultiplied surface because that is what Skia draws into, then converts back to the
+    /// canonical unpremultiplied format — the same round trip <see cref="SheetBaker.Assemble"/>
+    /// makes, and exact for the strictly binary alpha this art uses.
+    /// </summary>
+    private static Result<SKBitmap, BakeFailure> ApplyOverlays(
+        SKBitmap subject,
+        ImmutableArray<FullPath> overlays)
+    {
+        var loaded = new List<SKBitmap>(overlays.Length);
+
+        try
+        {
+            foreach (var path in overlays)
+            {
+                if (!File.Exists(path.Value))
+                {
+                    return new(BakeFailure.LayerNotFound);
+                }
+
+                var overlay = SKBitmap.Decode(path.Value);
+
+                if (overlay is null)
+                {
+                    return new(BakeFailure.LayerUnreadable);
+                }
+
+                loaded.Add(overlay);
+
+                if (overlay.Width != SheetLayout.SourceWidth || overlay.Height != SheetLayout.SourceHeight)
+                {
+                    return new(BakeFailure.LayerGeometryMismatch);
+                }
+            }
+
+            using var composited = new SKBitmap(new SKImageInfo(
+                SheetLayout.SourceWidth, SheetLayout.SourceHeight,
+                SKColorType.Rgba8888, SKAlphaType.Premul));
+
+            using (var canvas = new SKCanvas(composited))
+            {
+                canvas.Clear(SKColors.Transparent);
+                canvas.DrawBitmap(subject, 0, 0, PixelExact);
+
+                foreach (var overlay in loaded)
+                {
+                    canvas.DrawBitmap(overlay, 0, 0, PixelExact);
+                }
+            }
+
+            return SheetBaker.ToCanonical(composited);
+        }
+        finally
+        {
+            foreach (var overlay in loaded)
+            {
+                overlay.Dispose();
+            }
+        }
+    }
+
+    /// <summary>Nearest with no mipmapping — a scaled draw must never blur pixel art.</summary>
+    private static SKSamplingOptions PixelExact => new(SKFilterMode.Nearest, SKMipmapMode.None);
 }

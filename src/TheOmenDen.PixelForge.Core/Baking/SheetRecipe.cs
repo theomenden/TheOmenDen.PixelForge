@@ -23,4 +23,15 @@ public sealed record SheetRecipe
     /// every caller has to remember to check.
     /// </summary>
     public Optional<SkinRamp> Recolor { get; init; } = Optional<SkinRamp>.None;
+
+    /// <summary>
+    /// Layers drawn <em>after</em> the recolour, so their authored colours survive it. Empty
+    /// for layered output.
+    /// <para>
+    /// This is what makes flattening safe. <see cref="RoostSheets"/> records that some hair
+    /// partials legitimately use skin-ramp hexes as hair and trim; compositing those before
+    /// the substitution would recolour them along with the face.
+    /// </para>
+    /// </summary>
+    public ImmutableArray<FullPath> Overlays { get; init; } = [];
 }
