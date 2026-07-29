@@ -27,6 +27,9 @@ public sealed partial class MainWindow : Window
         SetTitleBar(AppTitleBar);
         AppWindow.SetIcon("Assets/AppIcon.ico");
 
+        // ViewModels have no XAML sender to derive a WindowId from, so it is published once here.
+        App.Services.GetRequiredService<PickerService>().WindowId = AppWindow.Id;
+
         ResizeToDefault();
 
         // Theme applies to the content root — Window itself has no RequestedTheme. Doing it

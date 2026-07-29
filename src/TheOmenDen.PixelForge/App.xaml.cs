@@ -68,6 +68,7 @@ public partial class App : Application
 
         builder.Services.AddSingleton<IThemeService, ThemeService>();
         builder.Services.AddSingleton<SourcePackService>();
+        builder.Services.AddSingleton<PickerService>();
         builder.Services.AddTransient<SettingsViewModel>();
 
         return builder.Build();
