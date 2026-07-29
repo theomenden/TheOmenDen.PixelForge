@@ -52,15 +52,21 @@ public sealed partial class BatchExportViewModel : ObservableObject
         }
     }
 
-    // Segmented.SelectedIndex defaults to -1 before items are realised — an unchecked cast would
-    // silently select Both (79 files) for any out-of-range index. Layered is the cheapest mode,
-    // so it is the fallback rather than the largest one.
-    public ExportMode Mode => SelectedModeIndex switch
-    {
-        1 => ExportMode.Flattened,
-        2 => ExportMode.Both,
-        _ => ExportMode.Layered,
-    };
+    /// <summary>
+    /// The mode the selected index means. <see cref="ExportMode"/>'s members are declared in the
+    /// order the page lists them, so the index <em>is</em> the enum value — no table of literals
+    /// that has to be kept in step with the XAML by hand.
+    /// </summary>
+    /// <remarks>
+    /// An index outside the enum is the control clearing itself (-1) rather than a choice. An
+    /// unchecked cast would make that Both — 79 files — so the fallback is deliberately the
+    /// cheapest mode, not the largest.
+    /// </remarks>
+    public ExportMode Mode => Enum.IsDefined((ExportMode)SelectedModeIndex)
+        ? (ExportMode)SelectedModeIndex
+        : DefaultMode;
+
+    private const ExportMode DefaultMode = ExportMode.Layered;
 
     /// <summary>
     /// The tradeoff, stated where the choice is made. Layered keeps hair a separate texture so a
@@ -69,15 +75,19 @@ public sealed partial class BatchExportViewModel : ObservableObject
     /// </summary>
     public string ModeDescription => Mode switch
     {
-        ExportMode.Layered =>
-            "One file per sheet. Hair stays a separate texture, so a style can be swapped at runtime without rebaking.",
-        ExportMode.Flattened =>
-            "Body and hair composited into one texture per pair. Fewer draw calls, but the hairstyle is baked in.",
-        ExportMode.Both =>
-            "Both: layered sheets for runtime swapping, plus a flattened texture for every body and hair pair.",
-        _ =>
-            "One file per sheet. Hair stays a separate texture, so a style can be swapped at runtime without rebaking.",
+        ExportMode.Flattened => FlattenedDescription,
+        ExportMode.Both => BothDescription,
+        _ => LayeredDescription,
     };
+
+    private const string LayeredDescription =
+        "One file per sheet. Hair stays a separate texture, so a style can be swapped at runtime without rebaking.";
+
+    private const string FlattenedDescription =
+        "Body and hair composited into one texture per pair. Fewer draw calls, but the hairstyle is baked in.";
+
+    private const string BothDescription =
+        "Both: layered sheets for runtime swapping, plus a flattened texture for every body and hair pair.";
 
     public string OutputFolder
     {

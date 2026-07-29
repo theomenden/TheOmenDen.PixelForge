@@ -13,6 +13,12 @@ namespace TheOmenDen.PixelForge.Views;
 public sealed partial class PipelinePage : Page
 {
     /// <summary>
+    /// How long a notice stays up. Longer than the palette page's: a run can post several at
+    /// once, and the user may be watching the progress bar rather than the bar underneath it.
+    /// </summary>
+    private static readonly TimeSpan NoticeDuration = TimeSpan.FromSeconds(6);
+
+    /// <summary>
     /// Gates <see cref="OnExportModeChanged"/> until the control has been told the view model's
     /// mode, so the Segmented's own initialisation never counts as a user choice.
     /// </summary>
@@ -85,6 +91,6 @@ public sealed partial class PipelinePage : Page
                 StatusLevel.Error => InfoBarSeverity.Error,
                 _ => InfoBarSeverity.Informational,
             },
-            Duration = notice.Level is StatusLevel.Error ? null : TimeSpan.FromSeconds(6),
+            Duration = notice.Level is StatusLevel.Error ? null : NoticeDuration,
         });
 }
