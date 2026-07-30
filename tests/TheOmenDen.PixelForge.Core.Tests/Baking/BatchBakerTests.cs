@@ -107,6 +107,64 @@ public sealed class BatchBakerTests : IDisposable
         Assert.Equal(3, Directory.GetFiles(output.Value, "*.webp").Length);
     }
 
+    /// <summary>
+    /// A recipe's <see cref="SheetRecipe.Directory"/> decides where its sheet lands, which is what
+    /// lets one run write heroes, attachments and the deliverable to three different places.
+    /// </summary>
+    /// <remarks>
+    /// The forward slashes in the recipe are deliberate — <c>FullPath</c> normalises them onto the
+    /// platform separator, so the same string can be written verbatim into the manifests.
+    /// </remarks>
+    [Fact]
+    public async Task RunAsync_WritesEachSheetIntoItsOwnDirectory()
+    {
+        var output = OutputDirectory();
+        var layer = WritePartial("layer.png");
+
+        Directory.CreateDirectory((output / "heroes/villager_01").Value);
+        Directory.CreateDirectory((output / "attachments/hair").Value);
+
+        ImmutableArray<SheetRecipe> recipes =
+        [
+            new() { Name = "villager_01", Layers = [new(layer, IsSkin: false)], Directory = "heroes/villager_01" },
+            new() { Name = "hair1", Layers = [new(layer, IsSkin: false)], Directory = "attachments/hair" },
+        ];
+
+        var summary = await BatchBaker.RunAsync(recipes, output, null, 2, TestContext.Current.CancellationToken);
+
+        Assert.Equal(2, summary.Succeeded);
+        Assert.True(File.Exists((output / "heroes/villager_01/villager_01.webp").Value));
+        Assert.True(File.Exists((output / "attachments/hair/hair1.webp").Value));
+        Assert.Empty(Directory.GetFiles(output.Value, "*.webp"));
+    }
+
+    /// <summary>
+    /// Nothing creates the directory yet, so a recipe pointing at one that is not there fails
+    /// rather than writing to the root.
+    /// </summary>
+    /// <remarks>
+    /// This is the gap directory pre-creation closes. It is asserted rather than left implicit
+    /// because the failure mode without it — sheets silently landing somewhere else — would be
+    /// far harder to spot than a returned <see cref="BakeFailure.OutputDirectoryUnavailable"/>.
+    /// </remarks>
+    [Fact]
+    public async Task RunAsync_FailsARecipe_WhenItsDirectoryDoesNotExist()
+    {
+        var output = OutputDirectory();
+        var layer = WritePartial("layer.png");
+
+        ImmutableArray<SheetRecipe> recipes =
+        [
+            new() { Name = "villager_01", Layers = [new(layer, IsSkin: false)], Directory = "heroes/villager_01" },
+        ];
+
+        var summary = await BatchBaker.RunAsync(recipes, output, null, 1, TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, summary.Succeeded);
+        Assert.Equal(1, summary.Failed);
+        Assert.Empty(Directory.GetFiles(output.Value, "*.webp"));
+    }
+
     [Fact]
     public async Task RunAsync_ReportsProgressOncePerRecipe()
     {

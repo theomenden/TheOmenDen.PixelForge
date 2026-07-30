@@ -75,7 +75,7 @@ public static class BatchManifest
         return new()
         {
             Name = recipe.Name,
-            File = recipe.Name + SheetWriter.Extension,
+            File = recipe.RelativePath,
             Geometry = recipe.Geometry.ToString(),
             Tone = recipe.Tone.TryGet(out var ramp) ? ramp.Name : string.Empty,
             Shadow = stems[(int)AssetSlot.Shadow],

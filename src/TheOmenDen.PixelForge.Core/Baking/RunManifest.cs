@@ -317,7 +317,7 @@ public static class RunManifest
     {
         writer.WriteStartObject();
         writer.WriteString(SheetNames.NameUtf8, recipe.Name);
-        writer.WriteString(SheetNames.FileUtf8, recipe.Name + SheetWriter.Extension);
+        writer.WriteString(SheetNames.FileUtf8, recipe.RelativePath);
         writer.WriteString(SheetNames.GeometryUtf8, GeometryName(recipe.Geometry));
 
         // Absent rather than blank when the sheet carries no skin. The CSV writes an empty cell

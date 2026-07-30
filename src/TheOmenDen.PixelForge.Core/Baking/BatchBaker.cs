@@ -147,7 +147,7 @@ public static class BatchBaker
     /// Bake and write one recipe. The pooled stream is disposed here so its buffer returns to
     /// the pool before the next recipe on this worker asks for one.
     /// </summary>
-    private static Result<ByteSize, BakeFailure> BakeOne(SheetRecipe recipe, FullPath outputDirectory)
+    private static Result<ByteSize, BakeFailure> BakeOne(SheetRecipe recipe, FullPath root)
     {
         var baked = RecipeBaker.Bake(recipe);
 
@@ -158,7 +158,18 @@ public static class BatchBaker
 
         using (sheet)
         {
-            return SheetWriter.Write(outputDirectory, recipe.Name, sheet);
+            return SheetWriter.Write(Destination(root, recipe), recipe.Name, sheet);
         }
     }
+
+    /// <summary>
+    /// Where one recipe's sheet lands: the export root, or a subdirectory of it.
+    /// </summary>
+    /// <remarks>
+    /// <c>FullPath</c>'s <c>/</c> is what normalises the recipe's forward slashes onto the
+    /// platform's separator, so the same relative string can be written verbatim into the manifests
+    /// and still resolve on disk here.
+    /// </remarks>
+    private static FullPath Destination(FullPath root, SheetRecipe recipe) =>
+        recipe.Directory.Length is 0 ? root : root / recipe.Directory;
 }

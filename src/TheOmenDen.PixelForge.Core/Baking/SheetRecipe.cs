@@ -23,6 +23,39 @@ public sealed record SheetRecipe
     public required string Name { get; init; }
 
     /// <summary>
+    /// Where this sheet goes, relative to the export root and separated with <c>/</c> —
+    /// <c>heroes/villager_01</c>, <c>attachments/hair</c>, <c>curated</c>. Empty means the root.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A layer export writes every recipe to a different place, so the destination is a property of
+    /// the recipe rather than an argument threaded beside it. That is also what keeps
+    /// <see cref="BatchBaker.RunAsync"/> at five parameters against a hard cap of six.
+    /// </para>
+    /// <para>
+    /// Forward slashes, not <see cref="Path.DirectorySeparatorChar"/>: this string is written into
+    /// the manifests as-is and read by a consumer that is not on Windows. Combination with the
+    /// export root goes through <c>FullPath</c>, which normalises it for the filesystem.
+    /// </para>
+    /// </remarks>
+    public string Directory { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The file this recipe writes, relative to the export root — <see cref="Directory"/>,
+    /// <see cref="Name"/> and <see cref="SheetWriter.Extension"/> joined.
+    /// </summary>
+    /// <remarks>
+    /// The single source for the <c>File</c> column in <c>sheets.csv</c> and the <c>file</c>
+    /// property in <c>manifest.json</c>. Those are composed by two different writers, and before
+    /// this existed each built the string itself — the same drift <c>StemsBySlot</c> is shared to
+    /// prevent, one layer up. Two writers, one mapping, or the manifests disagree about where a
+    /// sheet is and nothing catches it.
+    /// </remarks>
+    public string RelativePath => Directory.Length is 0
+        ? Name + SheetWriter.Extension
+        : $"{Directory}/{Name}{SheetWriter.Extension}";
+
+    /// <summary>
     /// Layers back to front, following the generator's <c>CharacterLayers</c> order — which is
     /// also <see cref="Catalog.AssetSlot"/>'s member order, so a planner can sort by slot.
     /// </summary>
