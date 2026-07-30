@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.ComponentModel;
 using CommunityToolkit.WinUI.Behaviors;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI.Xaml;
@@ -7,9 +6,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using SkiaSharp;
-using SkiaSharp.Views.Windows;
 using TheOmenDen.PixelForge.Core.Palettes;
-using TheOmenDen.PixelForge.Services;
 using TheOmenDen.PixelForge.ViewModels;
 
 namespace TheOmenDen.PixelForge.Views;
@@ -20,23 +17,20 @@ namespace TheOmenDen.PixelForge.Views;
 /// </summary>
 public sealed partial class PalettePage : Page
 {
-    /// <summary>Shown whenever there is nothing to render — no ramp, or no packs configured.</summary>
-    private const string NoPreviewHint = "Set the source pack folders in Settings to see a live preview.";
-
-    /// <summary>
-    /// Nearest-neighbour multiplier for the preview strip: 48px cells are unreadable at 1:1, and
-    /// 4x keeps the three faces (576x192) inside the editor column without a scrollbar.
-    /// </summary>
-    private const int PreviewScale = 4;
-
     /// <summary>How long a non-error notice stays up before the behavior dismisses it.</summary>
     private static readonly TimeSpan NoticeDuration = TimeSpan.FromSeconds(4);
 
-    private PalettePreview? _preview;
+    /// <summary>
+    /// Owns the recoloured strip, mirroring how <see cref="PipelinePage"/> owns its
+    /// <see cref="CompositePreview"/> — rendering is not a page's job.
+    /// </summary>
+    private readonly PalettePreviewHost _preview;
 
     public PalettePage()
     {
         InitializeComponent();
+
+        _preview = new(ViewModel, PreviewImage, PreviewHint);
 
         Loaded += OnLoaded;
         Unloaded += OnUnloaded;
@@ -97,106 +91,16 @@ public sealed partial class PalettePage : Page
     {
         // Loaded can re-fire on one instance (e.g. NavigationCacheMode.Enabled), so unsubscribe
         // before subscribing rather than assuming this only ever runs once.
-        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
-        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
-
         ViewModel.Notified -= OnNotified;
         ViewModel.Notified += OnNotified;
 
-        // PaletteViewModel reads SourcePackService.Resolved fresh but never subscribes to its
-        // Changed event — it is a singleton, so if the packs are (re)configured while this page
-        // is alive, nothing would otherwise trigger a re-render.
-        var packs = App.Services.GetRequiredService<SourcePackService>();
-        packs.Changed -= OnPacksChanged;
-        packs.Changed += OnPacksChanged;
-
-        RenderPreview();
-    }
-
-    private void OnPacksChanged(object? sender, EventArgs e)
-    {
-        // The cached preview was baked from the old packs — reconfiguring means the cached
-        // sheet is now wrong, not just stale, so it must be rebuilt, not just re-rendered.
-        _preview?.Dispose();
-        _preview = null;
-
-        RenderPreview();
+        _preview.Start();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
-        ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
         ViewModel.Notified -= OnNotified;
 
-        App.Services.GetRequiredService<SourcePackService>().Changed -= OnPacksChanged;
-
-        _preview?.Dispose();
-        _preview = null;
-    }
-
-    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(PaletteViewModel.PreviewRamp))
-        {
-            RenderPreview();
-        }
-    }
-
-    /// <summary>
-    /// Re-renders the recoloured sprite. The <see cref="PalettePreview"/> is built once per
-    /// session — it caches the curated, un-recoloured sheet, so a colour change costs only the
-    /// substitution and the upscale.
-    /// </summary>
-    private void RenderPreview()
-    {
-        if (ViewModel.PreviewRamp is not { } ramp)
-        {
-            PreviewHint.Text = NoPreviewHint;
-            ShowHint(visible: true);
-            return;
-        }
-
-        if (_preview is null)
-        {
-            if (!ViewModel.PreviewRecipe.TryGet(out var recipe))
-            {
-                PreviewHint.Text = NoPreviewHint;
-                ShowHint(visible: true);
-                return;
-            }
-
-            var created = PalettePreview.Create(recipe);
-
-            if (!created.TryGet(out _preview))
-            {
-                PreviewHint.Text = $"Preview unavailable: {created.Error}.";
-                ShowHint(visible: true);
-                return;
-            }
-        }
-
-        var rendered = _preview.RenderIdleRow(ramp, PreviewScale);
-
-        if (!rendered.TryGet(out var bitmap))
-        {
-            PreviewHint.Text = $"Preview unavailable: {rendered.Error}.";
-            ShowHint(visible: true);
-            return;
-        }
-
-        using (bitmap)
-        {
-            // Extension from SkiaSharp.Views.WinUI (namespace SkiaSharp.Views.Windows).
-            // First-party bridge — no hand-rolled COM interop.
-            PreviewImage.Source = bitmap.ToWriteableBitmap();
-        }
-
-        ShowHint(visible: false);
-    }
-
-    private void ShowHint(bool visible)
-    {
-        PreviewHint.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        PreviewImage.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+        _preview.Stop();
     }
 }
