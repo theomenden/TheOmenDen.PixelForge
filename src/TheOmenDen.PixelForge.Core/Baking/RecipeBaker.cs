@@ -3,7 +3,6 @@ using DotNext;
 using Microsoft.IO;
 using SkiaSharp;
 using TheOmenDen.PixelForge.Core.Palettes;
-using TheOmenDen.PixelForge.Core.Spritesheets;
 
 namespace TheOmenDen.PixelForge.Core.Baking;
 
@@ -91,27 +90,48 @@ public static class RecipeBaker
 
         var hasTone = recipe.Tone.HasValue;
 
-        using var composite = new LayerComposite();
+        // Created on the first decoded layer rather than up front, because that layer is what
+        // fixes the geometry. Nothing here knows the size beforehand any more, which is the point:
+        // a Time Fantasy sheet is 156x144 and a Time Elements partial is 1104x192, and both have
+        // to stream through this same loop.
+        LayerComposite? composite = null;
 
-        foreach (var layer in recipe.Layers)
+        try
         {
-            var canonical = Prepare(layer, substitution, hasTone);
-
-            if (!canonical.TryGet(out var ready))
+            foreach (var layer in recipe.Layers)
             {
-                return new(canonical.Error);
+                var canonical = Prepare(layer, substitution, hasTone);
+
+                if (!canonical.TryGet(out var ready))
+                {
+                    return new(canonical.Error);
+                }
+
+                // Drawn and released before the next one is decoded, so the peak is one layer
+                // rather than the whole stack.
+                using (ready)
+                {
+                    composite ??= new LayerComposite(ready.Width, ready.Height);
+
+                    if (ready.Width != composite.Width || ready.Height != composite.Height)
+                    {
+                        return new(BakeFailure.LayerGeometryMismatch);
+                    }
+
+                    composite.Draw(ready);
+                }
             }
 
-            // Drawn and released before the next one is decoded, so the peak is one layer rather
-            // than the whole stack. Prepare has already checked the geometry, which is the only
-            // thing the batched form validated up front.
-            using (ready)
-            {
-                composite.Draw(ready);
-            }
+            // Unreachable while the empty guard above stands, but the compiler cannot see that and
+            // a silent null-deref would be a poor way to find out if the guard ever moved.
+            return composite is null
+                ? new(BakeFailure.NoLayersSupplied)
+                : composite.Flatten();
         }
-
-        return composite.Flatten();
+        finally
+        {
+            composite?.Dispose();
+        }
     }
 
     /// <summary>
@@ -146,11 +166,10 @@ public static class RecipeBaker
             return new(BakeFailure.LayerUnreadable);
         }
 
-        if (decoded.Width != SheetLayout.SourceWidth || decoded.Height != SheetLayout.SourceHeight)
-        {
-            return new(BakeFailure.LayerGeometryMismatch);
-        }
-
+        // No geometry check here. Whether one layer is the right size is not a question a single
+        // layer can answer — the invariant is that the layers agree, which AssembleLayers checks
+        // against the first, and that the finished assembly suits the geometry, which Curate
+        // checks. Asking it here as well is what pinned every recipe to Time Elements.
         return layer.IsSkin && hasTone
             ? SheetBaker.Recolor(decoded, substitution)
             : SheetBaker.ToCanonical(decoded);

@@ -187,6 +187,45 @@ public sealed class SheetBakerTests
         Assert.Equal(BakeFailure.LayerGeometryMismatch, result.Error);
     }
 
+    /// <summary>
+    /// Compositing requires that layers agree with <em>each other</em>, not that they match Time
+    /// Elements. <see cref="SheetBaker.Curate"/> is what genuinely needs the 23x4 grid and checks
+    /// that itself, so a second pack's geometry has to pass through here untouched — Time Fantasy's
+    /// 156x144 diagonal sheet being the case that motivates it.
+    /// </summary>
+    [Fact]
+    public void Assemble_AcceptsAConsistentGeometryThatIsNotTimeElements()
+    {
+        using var back = NewBitmap(156, 144);
+        using var front = NewBitmap(156, 144);
+
+        var result = SheetBaker.Assemble([back, front]);
+
+        Assert.True(result.IsSuccessful, $"assemble failed with {result.Error}");
+
+        using var assembled = result.Value;
+
+        Assert.Equal(156, assembled.Width);
+        Assert.Equal(144, assembled.Height);
+    }
+
+    /// <summary>
+    /// The narrowed check must not become no check. Two layers that disagree still cannot be
+    /// composited, whatever their sizes — this is the same guarantee as before, stated against the
+    /// first layer rather than against a constant.
+    /// </summary>
+    [Fact]
+    public void Assemble_ReportsLayerGeometryMismatch_WhenLayersDisagreeAwayFromTimeElements()
+    {
+        using var first = NewBitmap(156, 144);
+        using var second = NewBitmap(78, 144);
+
+        var result = SheetBaker.Assemble([first, second]);
+
+        Assert.False(result.IsSuccessful);
+        Assert.Equal(BakeFailure.LayerGeometryMismatch, result.Error);
+    }
+
     [Fact]
     public void Assemble_ReportsNoLayersSupplied_WhenGivenNothing()
     {

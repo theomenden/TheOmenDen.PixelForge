@@ -1,14 +1,14 @@
+using CommunityToolkit.Diagnostics;
 using DotNext;
 using SkiaSharp;
-using TheOmenDen.PixelForge.Core.Spritesheets;
 
 namespace TheOmenDen.PixelForge.Core.Baking;
 
 /// <summary>
-/// A source-geometry composite surface that takes layers one at a time.
+/// A composite surface that takes layers one at a time, sized by its first one.
 /// <para>
-/// This exists so a caller never has to hold every decoded layer at once. A canonical source
-/// partial is 1104x192x4 = 828 KiB, so a stack that decoded all of them first peaked at
+/// This exists so a caller never has to hold every decoded layer at once. A canonical Time
+/// Elements partial is 1104x192x4 = 828 KiB, so a stack that decoded all of them first peaked at
 /// <c>layers x 828 KiB</c> — 9.7 MiB for the full ten-slot stack, multiplied again by
 /// <c>MaxDegreeOfParallelism</c> across a batch run. Drawing and releasing one at a time makes
 /// that peak flat in stack depth: the surface, one layer, and the converted result.
@@ -29,17 +29,32 @@ internal sealed class LayerComposite : Disposable
     private readonly SKBitmap _surface;
     private readonly SKCanvas _canvas;
 
-    public LayerComposite()
+    /// <summary>
+    /// Creates a surface of the given size.
+    /// </summary>
+    /// <param name="width">Layer width in pixels.</param>
+    /// <param name="height">Layer height in pixels.</param>
+    /// <remarks>
+    /// Taken from the caller rather than read from <c>SheetLayout</c>. Compositing needs layers to
+    /// agree with each other; it does not need them to be Time Elements, and hard-coding that here
+    /// was what stopped a second pack's sheet from being assembled at all.
+    /// </remarks>
+    public LayerComposite(int width, int height)
     {
-        _surface = new SKBitmap(new SKImageInfo(
-            SheetLayout.SourceWidth,
-            SheetLayout.SourceHeight,
-            SKColorType.Rgba8888,
-            SKAlphaType.Premul));
+        Guard.IsGreaterThan(width, 0);
+        Guard.IsGreaterThan(height, 0);
+
+        _surface = new SKBitmap(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
 
         _canvas = new SKCanvas(_surface);
         _canvas.Clear(SKColors.Transparent);
     }
+
+    /// <summary>The surface width, which the first layer drawn into it fixed.</summary>
+    public int Width => _surface.Width;
+
+    /// <summary>The surface height, which the first layer drawn into it fixed.</summary>
+    public int Height => _surface.Height;
 
     /// <summary>
     /// Draws one layer over what is already there. The layer is only read, so the caller is free

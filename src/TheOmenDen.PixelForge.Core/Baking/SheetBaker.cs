@@ -70,15 +70,20 @@ public static class SheetBaker
             return new(BakeFailure.NoLayersSupplied);
         }
 
+        // Layers must agree with each other, which is what compositing actually requires. Matching
+        // Time Elements is Curate's question, and it asks it separately — checking it here as well
+        // was over-constraint, and it is what refused a second pack's geometry outright.
+        var first = layers[0];
+
         foreach (var layer in layers)
         {
-            if (layer.Width != SheetLayout.SourceWidth || layer.Height != SheetLayout.SourceHeight)
+            if (layer.Width != first.Width || layer.Height != first.Height)
             {
                 return new(BakeFailure.LayerGeometryMismatch);
             }
         }
 
-        using var composite = new LayerComposite();
+        using var composite = new LayerComposite(first.Width, first.Height);
 
         foreach (var layer in layers)
         {
