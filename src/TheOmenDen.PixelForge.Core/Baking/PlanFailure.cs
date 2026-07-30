@@ -21,4 +21,15 @@ public enum PlanFailure
     /// </para>
     /// </summary>
     RequiredSlotEmpty,
+
+    /// <summary>
+    /// <c>heroes.json</c> is present but is not valid JSON, or does not satisfy its schema.
+    /// <para>
+    /// The run stops rather than renumbering. A registry that cannot be read is exactly the case
+    /// where guessing is dangerous: assigning fresh numbers over an existing tree is the silent
+    /// corruption the read-back exists to prevent, and it would leave every path that referenced a
+    /// hero pointing at a different body with no error anywhere.
+    /// </para>
+    /// </summary>
+    HeroRegistryUnreadable,
 }

@@ -72,4 +72,12 @@ public enum BakeFailure
     /// </para>
     /// </summary>
     ManifestSchemaViolation,
+
+    /// <summary>
+    /// The composed <c>heroes.json</c> or <c>loadouts/&lt;class&gt;.json</c> did not satisfy its own
+    /// schema. Like <see cref="ManifestSchemaViolation"/> this is a bug rather than bad input, and
+    /// stays a value for the same reason: nothing invalid may reach disk where a consumer — or the
+    /// next run's own read-back — would trust it.
+    /// </summary>
+    HeroRegistrySchemaViolation,
 }

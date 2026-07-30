@@ -87,7 +87,7 @@ public static class RunManifest
     /// pair with no network access.
     /// </para>
     /// </summary>
-    public static string SchemaText { get; } = ReadEmbeddedSchema();
+    public static string SchemaText { get; } = EmbeddedSchemas.Read(SchemaFileName);
 
     /// <summary>Schema property name for each <see cref="AssetSlot"/>, in draw order.</summary>
     /// <remarks>
@@ -387,20 +387,4 @@ public static class RunManifest
     private static string Hex(SKColor color) =>
         string.Create(CultureInfo.InvariantCulture, $"#{color.Red:X2}{color.Green:X2}{color.Blue:X2}");
 
-    private static string ReadEmbeddedSchema()
-    {
-        // The Schema assembly, not this one: the schema is embedded beside the type generated
-        // from it, so the two can never drift to different files.
-        var assembly = typeof(RunManifestDocument).Assembly;
-
-        // GetManifestResourceNames returns an array, which the ZLinq drop-in generator covers, so
-        // this First binds to ZLinq without an AsValueEnumerable.
-        var name = assembly.GetManifestResourceNames()
-            .First(candidate => candidate.EndsWith(SchemaFileName, StringComparison.Ordinal));
-
-        using var stream = assembly.GetManifestResourceStream(name)!;
-        using var reader = new StreamReader(stream);
-
-        return reader.ReadToEnd();
-    }
 }
