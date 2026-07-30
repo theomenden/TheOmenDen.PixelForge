@@ -169,16 +169,28 @@ public static class BatchPlan
     {
         Guard.IsNotNull(chosen);
 
-        var stem = string.Join('_', chosen.AsValueEnumerable().Select(static partial => partial.Stem).ToArray());
-
-        if (!tone.TryGet(out var ramp)
-            || string.Equals(ramp.Name, SkinRamps.Source.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            return stem;
-        }
-
-        return $"{stem}_{Slug.Create(ramp.Name, ToneSlug)}";
+        return WithTone(
+            string.Join('_', chosen.AsValueEnumerable().Select(static partial => partial.Stem).ToArray()),
+            tone);
     }
+
+    /// <summary>
+    /// Appends the tone segment to <paramref name="stem"/>, or leaves it alone.
+    /// </summary>
+    /// <param name="stem">Whatever names the sheet before the tone — joined partials, or a hero label.</param>
+    /// <param name="tone">The tone the sheet is baked in, or none.</param>
+    /// <returns>The stem, with a tone segment only where one is warranted.</returns>
+    /// <remarks>
+    /// Shared with <see cref="LayerPlan"/>, which names a hero's base sheet after the hero rather
+    /// than after its partials but must suffix it identically. Lifting the rule here rather than
+    /// restating it keeps one answer to "is this tone worth naming", including the
+    /// <see cref="SkinRamps.Source"/> exemption and the <see cref="ToneSlug"/> options.
+    /// </remarks>
+    internal static string WithTone(string stem, Optional<SkinRamp> tone) =>
+        !tone.TryGet(out var ramp)
+        || string.Equals(ramp.Name, SkinRamps.Source.Name, StringComparison.OrdinalIgnoreCase)
+            ? stem
+            : $"{stem}_{Slug.Create(ramp.Name, ToneSlug)}";
 
     /// <summary>
     /// The selections that contribute a real axis, in draw order.
@@ -188,7 +200,7 @@ public static class BatchPlan
     /// per combination — <see cref="AssetSlot"/>'s value <em>is</em> the draw order. A selection
     /// with no choices is dropped rather than multiplying the cross product by zero.
     /// </remarks>
-    private static ImmutableArray<SlotSelection> Filled(ImmutableArray<SlotSelection> selections)
+    internal static ImmutableArray<SlotSelection> Filled(ImmutableArray<SlotSelection> selections)
     {
         if (selections.IsDefaultOrEmpty)
         {
@@ -208,7 +220,7 @@ public static class BatchPlan
     /// committing to some is <see cref="PlanFailure.RequiredSlotEmpty"/>, which catches both a
     /// missing bottom and a head that offers <c>(none)</c>.
     /// </remarks>
-    private static Optional<PlanFailure> Validate(ImmutableArray<SlotSelection> filled)
+    internal static Optional<PlanFailure> Validate(ImmutableArray<SlotSelection> filled)
     {
         if (filled.IsEmpty)
         {
@@ -359,7 +371,7 @@ public static class BatchPlan
             : selection.Choices.Length;
 
     /// <summary>Multiplies without wrapping, clamping at <see cref="long.MaxValue"/>.</summary>
-    private static long Saturate(long left, long right) =>
+    internal static long Saturate(long left, long right) =>
         left is 0 || right is 0 ? 0
         : left > long.MaxValue / right ? long.MaxValue
         : left * right;
