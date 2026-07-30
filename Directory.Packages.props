@@ -75,7 +75,12 @@
     <!-- Slugs the arbitrary text of a skin-ramp name into a filename segment. Latest stable
          (the plan named 1.0.9); 2.0.0 ships a net10.0 target. -->
     <PackageVersion Include="Meziantou.Framework.Slug" Version="2.0.0" />
-    <PackageVersion Include="CsvHelper" Version="33.1.0" />
+    <!-- CSV. Sep over CsvHelper: CsvHelper binds rows to types by reflection, which is exactly
+         what a trimmer cannot follow, so it was the one thing keeping Core off IsAotCompatible.
+         Sep ships IsAotCompatible/IsTrimmable assembly metadata, has no object mapper at all
+         (columns are named at the call site), and is roughly an order of magnitude faster with
+         near-zero allocation. Its defaults differ from CsvHelper's — see Core/Csv.cs. -->
+    <PackageVersion Include="Sep" Version="0.15.1" />
   </ItemGroup>
 
   <ItemGroup>

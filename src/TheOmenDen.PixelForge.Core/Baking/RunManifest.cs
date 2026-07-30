@@ -121,10 +121,12 @@ public static class RunManifest
     /// <see cref="BakeFailure.ManifestSchemaViolation"/> when the composed document fails its own
     /// schema — in which case nothing is written at all.
     /// </returns>
-    public static Result<int, BakeFailure> WriteTo(
+    /// <param name="cancellationToken">Cancels the two file writes.</param>
+    public static async Task<Result<int, BakeFailure>> WriteToAsync(
         FullPath directory,
         Guid runId,
-        ImmutableArray<SheetRecipe> recipes)
+        ImmutableArray<SheetRecipe> recipes,
+        CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(directory.Value))
         {
@@ -144,12 +146,16 @@ public static class RunManifest
 
         try
         {
-            using (var manifest = File.Create((directory / FileName).Value))
+            await using (var manifest = AsyncFiles.Create(directory / FileName))
             {
-                buffer.WriteTo(manifest);
+                // GetBuffer is zero-copy, unlike ToArray, which this manager throws on by design.
+                await manifest.WriteAsync(Composed(buffer), cancellationToken);
             }
 
-            File.WriteAllText((directory / SchemaFileName).Value, SchemaText);
+            await File.WriteAllTextAsync(
+                (directory / SchemaFileName).Value,
+                SchemaText,
+                cancellationToken);
 
             return count;
         }
@@ -166,16 +172,18 @@ public static class RunManifest
     /// <param name="destination">Where the validated bytes go. Untouched if validation fails.</param>
     /// <param name="runId">The run identifier stamped into the document.</param>
     /// <param name="recipes">The recipes the run was given, in bake order.</param>
+    /// <param name="cancellationToken">Cancels the write, not the composition.</param>
     /// <returns>The sheet count, or <see cref="BakeFailure.ManifestSchemaViolation"/>.</returns>
     /// <remarks>
-    /// The same split <see cref="Spritesheets.SheetIndex.Write(TextWriter)"/> and
-    /// <see cref="RampStore"/> use: a stream-taking core with a <see cref="FullPath"/>-taking
+    /// The same split <see cref="Spritesheets.SheetIndex.WriteAsync(TextWriter, CancellationToken)"/>
+    /// and <see cref="RampStore"/> use: a stream-taking core with a <see cref="FullPath"/>-taking
     /// wrapper over it.
     /// </remarks>
-    public static Result<int, BakeFailure> Write(
+    public static async Task<Result<int, BakeFailure>> WriteAsync(
         Stream destination,
         Guid runId,
-        ImmutableArray<SheetRecipe> recipes)
+        ImmutableArray<SheetRecipe> recipes,
+        CancellationToken cancellationToken = default)
     {
         Guard.IsNotNull(destination);
 
@@ -188,10 +196,23 @@ public static class RunManifest
             return validated;
         }
 
-        buffer.WriteTo(destination);
+        await destination.WriteAsync(Composed(buffer), cancellationToken);
 
         return count;
     }
+
+    /// <summary>
+    /// The composed bytes, as memory over the pooled buffer rather than a copy of it.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="RecyclableMemoryStream.WriteTo(Stream)"/> is the zero-copy synchronous route and
+    /// has no async counterpart; <c>CopyToAsync</c> would start from the write position rather than
+    /// from zero. Handing the buffer straight to <c>WriteAsync</c> is both async and zero-copy —
+    /// and <c>ToArray</c>, which would copy it back onto the managed heap, throws on this manager
+    /// by design.
+    /// </remarks>
+    private static ReadOnlyMemory<byte> Composed(RecyclableMemoryStream buffer) =>
+        buffer.GetBuffer().AsMemory(0, (int)buffer.Length);
 
     /// <summary>
     /// Fills <paramref name="buffer"/> with the manifest and parses it straight back to prove it
@@ -211,11 +232,7 @@ public static class RunManifest
 
         Compose(buffer, runId, sheets);
 
-        // GetBuffer is zero-copy; ToArray throws by design on this manager because it would copy
-        // the pooled buffer straight back onto the managed heap.
-        var utf8 = buffer.GetBuffer().AsMemory(0, (int)buffer.Length);
-
-        using var parsed = ParsedJsonDocument<RunManifestDocument>.Parse(utf8);
+        using var parsed = ParsedJsonDocument<RunManifestDocument>.Parse(Composed(buffer));
 
         if (!parsed.RootElement.EvaluateSchema())
         {

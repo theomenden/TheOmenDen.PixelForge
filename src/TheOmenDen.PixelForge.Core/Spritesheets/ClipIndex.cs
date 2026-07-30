@@ -1,10 +1,9 @@
 using System.Collections.Immutable;
-using System.Globalization;
 using CommunityToolkit.Diagnostics;
-using CsvHelper;
 using DotNext;
 using Meziantou.Framework;
 using TheOmenDen.PixelForge.Core.Baking;
+using TheOmenDen.PixelForge.Core.Buffers;
 
 namespace TheOmenDen.PixelForge.Core.Spritesheets;
 
@@ -62,25 +61,47 @@ public static class ClipIndex
     }
 
     /// <summary>Writes the manifest and reports how many rows landed.</summary>
+    /// <param name="writer">The destination, left open.</param>
+    /// <param name="cancellationToken">Cancels between rows.</param>
     /// <returns>The number of rows written, which is always <see cref="Rows"/>'s length.</returns>
-    public static int Write(TextWriter writer)
+    public static async Task<int> WriteAsync(TextWriter writer, CancellationToken cancellationToken = default)
     {
         Guard.IsNotNull(writer);
 
-        using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture, leaveOpen: true);
+        await using (var csv = Csv.Writer(writer))
+        {
+            foreach (var row in Rows)
+            {
+                await using var line = csv.NewRow(cancellationToken);
 
-        csv.WriteRecords(Rows);
-        csv.Flush();
+                line[nameof(row.Clip)].Set(row.Clip);
+                line[nameof(row.Facing)].Set(row.Facing);
+                line[nameof(row.SourceRow)].Format(row.SourceRow);
+                line[nameof(row.FrameIndex)].Format(row.FrameIndex);
+                line[nameof(row.SourceColumn)].Format(row.SourceColumn);
+                line[nameof(row.CellSize)].Format(row.CellSize);
+                line[nameof(row.FrameDurationMs)].Format(row.FrameDurationMs);
+
+                // bool is ISpanParsable but not ISpanFormattable, so Format does not accept it.
+                // The literals are the same "True"/"False" bool.Parse reads back.
+                line[nameof(row.ReverseDrawOrder)]
+                    .Set(row.ReverseDrawOrder ? bool.TrueString : bool.FalseString);
+            }
+        }
 
         return Rows.Length;
     }
 
     /// <summary>Writes <c>clips.csv</c> into an export directory.</summary>
+    /// <param name="directory">Where the run's sheets were written.</param>
+    /// <param name="cancellationToken">Cancels between rows.</param>
     /// <returns>
     /// The row count, or <see cref="BakeFailure.OutputDirectoryUnavailable"/> when the folder is
     /// not there, or <see cref="BakeFailure.OutputWriteFailed"/> when it cannot be written.
     /// </returns>
-    public static Result<int, BakeFailure> WriteTo(FullPath directory)
+    public static async Task<Result<int, BakeFailure>> WriteToAsync(
+        FullPath directory,
+        CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(directory.Value))
         {
@@ -89,9 +110,9 @@ public static class ClipIndex
 
         try
         {
-            using var writer = new StreamWriter((directory / FileName).Value);
+            await using var writer = AsyncFiles.CreateText(directory / FileName);
 
-            return Write(writer);
+            return await WriteAsync(writer, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

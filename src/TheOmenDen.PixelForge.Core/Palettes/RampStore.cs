@@ -1,9 +1,10 @@
 using System.Collections.Immutable;
-using System.Globalization;
 using CommunityToolkit.Diagnostics;
-using CsvHelper;
 using DotNext;
 using Meziantou.Framework;
+using nietras.SeparatedValues;
+using SkiaSharp;
+using TheOmenDen.PixelForge.Core.Buffers;
 
 namespace TheOmenDen.PixelForge.Core.Palettes;
 
@@ -22,53 +23,86 @@ namespace TheOmenDen.PixelForge.Core.Palettes;
 /// </summary>
 public sealed class RampStore(FullPath file)
 {
+    private const string NameColumn = "Name";
+
+    private const string IsHumanColumn = "IsHuman";
+
+    /// <summary>
+    /// The step columns, darkest first. These names <em>are</em> the file format, so they are
+    /// written out rather than generated from <see cref="SkinRamps.StepCount"/>; the round-trip
+    /// tests are what hold the two in step.
+    /// </summary>
+    private static readonly string[] StepColumns = ["Step1", "Step2", "Step3", "Step4", "Step5"];
+
     public FullPath File => file;
 
-    public static Result<ImmutableArray<SkinRamp>, RampFailure> Read(TextReader reader)
+    /// <summary>Reads every ramp in <paramref name="reader"/>, or names the first thing wrong.</summary>
+    /// <param name="reader">The source, left open.</param>
+    /// <param name="cancellationToken">Cancels between rows.</param>
+    /// <returns>The ramps in file order, or the failure that stopped the read.</returns>
+    /// <remarks>
+    /// Enumerated through <see cref="SepReader.GetAsyncEnumerator"/> by hand rather than with
+    /// <c>await foreach</c>, which has no syntax for passing a token: <c>WithCancellation</c> is an
+    /// extension on <see cref="IAsyncEnumerable{T}"/> whose <c>T</c> is not declared
+    /// <c>allows ref struct</c>, and <see cref="SepReader.Row"/> is one.
+    /// </remarks>
+    public static async Task<Result<ImmutableArray<SkinRamp>, RampFailure>> ReadAsync(
+        TextReader reader,
+        CancellationToken cancellationToken = default)
     {
         Guard.IsNotNull(reader);
 
-        List<RampRow> rows;
+        var ramps = ImmutableArray.CreateBuilder<SkinRamp>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
-            using var csv = new CsvReader(reader, CultureInfo.InvariantCulture, leaveOpen: true);
+            using var csv = await Csv.ReaderAsync(reader, cancellationToken);
 
-            rows = [.. csv.GetRecords<RampRow>()];
+            await using var rows = csv.GetAsyncEnumerator(cancellationToken);
+
+            while (await rows.MoveNextAsync())
+            {
+                var converted = ToRamp(rows.Current);
+
+                if (!converted.TryGet(out var ramp))
+                {
+                    return new(converted.Error);
+                }
+
+                if (!seen.Add(ramp.Name))
+                {
+                    return new(RampFailure.DuplicateName);
+                }
+
+                ramps.Add(ramp);
+            }
         }
-        catch (CsvHelperException)
+        catch (InvalidDataException)
         {
+            // Sep reports structural faults — a row whose column count disagrees with the header,
+            // an unterminated quote — during enumeration, so the whole loop is inside the try.
             return new(RampFailure.StoreMalformed);
         }
 
-        var ramps = ImmutableArray.CreateBuilder<SkinRamp>(rows.Count);
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var row in rows)
-        {
-            var converted = row.ToRamp();
-
-            if (!converted.TryGet(out var ramp))
-            {
-                return new(converted.Error);
-            }
-
-            if (!seen.Add(ramp.Name))
-            {
-                return new(RampFailure.DuplicateName);
-            }
-
-            ramps.Add(ramp);
-        }
-
-        return ramps.ToImmutable();
+        return ramps.DrainToImmutable();
     }
 
-    public static Result<int, RampFailure> Write(TextWriter writer, IReadOnlyList<SkinRamp> ramps)
+    /// <summary>Writes <paramref name="ramps"/> and reports how many landed.</summary>
+    /// <param name="writer">The destination, left open.</param>
+    /// <param name="ramps">The ramps to write, in order.</param>
+    /// <param name="cancellationToken">Cancels between rows.</param>
+    /// <returns>The count, or the first ramp fault found — in which case nothing is written.</returns>
+    public static async Task<Result<int, RampFailure>> WriteAsync(
+        TextWriter writer,
+        IReadOnlyList<SkinRamp> ramps,
+        CancellationToken cancellationToken = default)
     {
         Guard.IsNotNull(writer);
         Guard.IsNotNull(ramps);
 
+        // Everything is checked before anything is written: a rejected ramp halfway through would
+        // otherwise leave a truncated file behind under Save.
         foreach (var ramp in ramps)
         {
             if (ramp.Steps.Length != SkinRamps.StepCount)
@@ -82,23 +116,88 @@ public sealed class RampStore(FullPath file)
             }
         }
 
-        var rows = new List<RampRow>(ramps.Count);
-
-        foreach (var ramp in ramps)
+        await using (var csv = Csv.Writer(writer))
         {
-            rows.Add(ramp.ToRow());
+            foreach (var ramp in ramps)
+            {
+                await using var line = csv.NewRow(cancellationToken);
+
+                line[NameColumn].Set(ramp.Name);
+
+                // bool is ISpanParsable but not ISpanFormattable, so Format does not accept it.
+                line[IsHumanColumn].Set(ramp.IsHuman ? bool.TrueString : bool.FalseString);
+
+                for (var step = 0; step < StepColumns.Length; step++)
+                {
+                    line[StepColumns[step]].Set(RampConversions.Hex(ramp.Steps[step]));
+                }
+            }
         }
-
-        using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture, leaveOpen: true);
-
-        csv.WriteRecords(rows);
-        csv.Flush();
 
         return ramps.Count;
     }
 
+    /// <summary>
+    /// Reads one row into a ramp, or names the reason it could not be.
+    /// </summary>
+    /// <param name="row">The row to read. A column the header does not carry is malformed input.</param>
+    /// <returns>The ramp, or the failure that stopped it.</returns>
+    /// <remarks>
+    /// Takes the row rather than seven loose fields — past six parameters the arguments are a type
+    /// that has not been named, and here that type already exists as
+    /// <see cref="SepReader.Row"/>.
+    /// <para>
+    /// One deliberate narrowing against the CsvHelper original: <c>IsHuman</c> now parses through
+    /// <see cref="bool"/>, which takes <c>True</c>/<c>False</c> in any casing but no longer the
+    /// <c>yes</c>/<c>1</c> spellings CsvHelper also accepted. Nothing writes those, and a hand-edit
+    /// that uses one now fails loudly rather than reading as <see langword="false"/>.
+    /// </para>
+    /// </remarks>
+    private static Result<SkinRamp, RampFailure> ToRamp(SepReader.Row row)
+    {
+        if (!row.TryGet(NameColumn, out var name) || !row.TryGet(IsHumanColumn, out var isHuman))
+        {
+            return new(RampFailure.StoreMalformed);
+        }
+
+        var text = name.ToString().Trim();
+
+        if (text.Length is 0)
+        {
+            return new(RampFailure.NameEmpty);
+        }
+
+        if (!isHuman.TryParse<bool>(out var human))
+        {
+            return new(RampFailure.StoreMalformed);
+        }
+
+        var steps = ImmutableArray.CreateBuilder<SKColor>(StepColumns.Length);
+
+        foreach (var column in StepColumns)
+        {
+            if (!row.TryGet(column, out var hex)
+                || !RampConversions.TryParseHex(hex.ToString(), out var color))
+            {
+                return new(RampFailure.StoreMalformed);
+            }
+
+            steps.Add(color);
+        }
+
+        return new SkinRamp
+        {
+            Name = text,
+            IsHuman = human,
+            Steps = steps.MoveToImmutable(),
+        };
+    }
+
     /// <summary>A missing file is an empty set, not a failure — first run is the normal case.</summary>
-    public Result<ImmutableArray<SkinRamp>, RampFailure> Load()
+    /// <param name="cancellationToken">Cancels between rows.</param>
+    /// <returns>The stored ramps, or the failure that stopped the read.</returns>
+    public async Task<Result<ImmutableArray<SkinRamp>, RampFailure>> LoadAsync(
+        CancellationToken cancellationToken = default)
     {
         if (!System.IO.File.Exists(file.Value))
         {
@@ -107,9 +206,9 @@ public sealed class RampStore(FullPath file)
 
         try
         {
-            using var reader = new StreamReader(file.Value);
+            using var reader = AsyncFiles.OpenText(file);
 
-            return Read(reader);
+            return await ReadAsync(reader, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -117,7 +216,13 @@ public sealed class RampStore(FullPath file)
         }
     }
 
-    public Result<int, RampFailure> Save(IReadOnlyList<SkinRamp> ramps)
+    /// <summary>Writes <paramref name="ramps"/> to <see cref="File"/>, creating the folder if needed.</summary>
+    /// <param name="ramps">The ramps to store, in order.</param>
+    /// <param name="cancellationToken">Cancels between rows.</param>
+    /// <returns>The count, or the failure that stopped the write.</returns>
+    public async Task<Result<int, RampFailure>> SaveAsync(
+        IReadOnlyList<SkinRamp> ramps,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -128,9 +233,9 @@ public sealed class RampStore(FullPath file)
                 Directory.CreateDirectory(parent.Value);
             }
 
-            using var writer = new StreamWriter(file.Value);
+            await using var writer = AsyncFiles.CreateText(file);
 
-            return Write(writer, ramps);
+            return await WriteAsync(writer, ramps, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

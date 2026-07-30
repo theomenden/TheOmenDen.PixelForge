@@ -143,8 +143,11 @@ public sealed partial class PaletteViewModel : ObservableObject
     private void Notify(string message, StatusLevel level) =>
         Notified?.Invoke(this, new StatusNoticeEventArgs(message, level));
 
+    // The four commands below are async only because the store write behind them is. The "Async"
+    // suffix is stripped from the generated command name, so NewRampCommand and friends are
+    // unchanged and the XAML bindings still resolve.
     [RelayCommand]
-    private void NewRamp()
+    private async Task NewRampAsync(CancellationToken cancellationToken)
     {
         var ramp = new SkinRamp
         {
@@ -153,11 +156,14 @@ public sealed partial class PaletteViewModel : ObservableObject
             Steps = SkinRamps.Source.Steps,
         };
 
-        Apply(_ramps.Add(ramp), $"Created {ramp.Name}", () => SelectByName(ramp.Name));
+        Apply(
+            await _ramps.AddAsync(ramp, cancellationToken),
+            $"Created {ramp.Name}",
+            () => SelectByName(ramp.Name));
     }
 
     [RelayCommand(CanExecute = nameof(CanDuplicate))]
-    private void DuplicateRamp()
+    private async Task DuplicateRampAsync(CancellationToken cancellationToken)
     {
         if (SelectedRamp is null)
         {
@@ -166,13 +172,16 @@ public sealed partial class PaletteViewModel : ObservableObject
 
         var copy = SelectedRamp with { Name = UniqueName($"{SelectedRamp.Name} copy") };
 
-        Apply(_ramps.Add(copy), $"Duplicated to {copy.Name}", () => SelectByName(copy.Name));
+        Apply(
+            await _ramps.AddAsync(copy, cancellationToken),
+            $"Duplicated to {copy.Name}",
+            () => SelectByName(copy.Name));
     }
 
     private bool CanDuplicate() => SelectedRamp is not null;
 
     [RelayCommand(CanExecute = nameof(CanEditSelection))]
-    private void DeleteRamp()
+    private async Task DeleteRampAsync(CancellationToken cancellationToken)
     {
         if (SelectedRamp is null)
         {
@@ -181,11 +190,14 @@ public sealed partial class PaletteViewModel : ObservableObject
 
         var name = SelectedRamp.Name;
 
-        Apply(_ramps.Remove(name), $"Deleted {name}", () => SelectedRamp = _ramps.Ramps.Count > 0 ? _ramps.Ramps[0] : null);
+        Apply(
+            await _ramps.RemoveAsync(name, cancellationToken),
+            $"Deleted {name}",
+            () => SelectedRamp = _ramps.Ramps.Count > 0 ? _ramps.Ramps[0] : null);
     }
 
     [RelayCommand(CanExecute = nameof(CanSave))]
-    private void SaveRamp()
+    private async Task SaveRampAsync(CancellationToken cancellationToken)
     {
         if (SelectedRamp is null)
         {
@@ -205,7 +217,10 @@ public sealed partial class PaletteViewModel : ObservableObject
             Steps = steps.ToImmutable(),
         };
 
-        Apply(_ramps.Replace(SelectedRamp.Name, edited), $"Saved {edited.Name}", () => SelectByName(edited.Name));
+        Apply(
+            await _ramps.ReplaceAsync(SelectedRamp.Name, edited, cancellationToken),
+            $"Saved {edited.Name}",
+            () => SelectByName(edited.Name));
     }
 
     private bool CanSave() => IsEditable && !string.IsNullOrWhiteSpace(EditedName);
@@ -213,7 +228,7 @@ public sealed partial class PaletteViewModel : ObservableObject
     private bool CanEditSelection() => IsEditable;
 
     [RelayCommand]
-    private async Task ImportAsync()
+    private async Task ImportAsync(CancellationToken cancellationToken)
     {
         var picked = await _picker.PickOpenFileAsync(".csv");
 
@@ -222,7 +237,7 @@ public sealed partial class PaletteViewModel : ObservableObject
             return;
         }
 
-        var imported = _ramps.Import(file);
+        var imported = await _ramps.ImportAsync(file, cancellationToken);
 
         if (imported.TryGet(out var count))
         {
@@ -235,7 +250,7 @@ public sealed partial class PaletteViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task ExportAsync()
+    private async Task ExportAsync(CancellationToken cancellationToken)
     {
         var picked = await _picker.PickSaveFileAsync("ramps", ".csv", "Palette CSV");
 
@@ -244,7 +259,7 @@ public sealed partial class PaletteViewModel : ObservableObject
             return;
         }
 
-        var exported = _ramps.Export(file);
+        var exported = await _ramps.ExportAsync(file, cancellationToken);
 
         if (exported.TryGet(out var count))
         {

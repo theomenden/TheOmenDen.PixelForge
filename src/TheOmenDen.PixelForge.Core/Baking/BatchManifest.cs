@@ -1,9 +1,8 @@
 using System.Collections.Immutable;
-using System.Globalization;
 using CommunityToolkit.Diagnostics;
-using CsvHelper;
 using DotNext;
 using Meziantou.Framework;
+using TheOmenDen.PixelForge.Core.Buffers;
 using TheOmenDen.PixelForge.Core.Catalog;
 
 namespace TheOmenDen.PixelForge.Core.Baking;
@@ -19,10 +18,10 @@ namespace TheOmenDen.PixelForge.Core.Baking;
 /// partials that produced it.
 /// </para>
 /// <para>
-/// Written with the same shape as <see cref="Spritesheets.ClipIndex"/> — <see cref="CsvWriter"/>
-/// over <see cref="CultureInfo.InvariantCulture"/>, a <see cref="Result{T, TError}"/> return and
-/// the same narrow exception filter — with the run id prepended as the first column so rows from
-/// separate runs stay attributable when the files are concatenated.
+/// Written with the same shape as <see cref="Spritesheets.ClipIndex"/> — the shared
+/// <see cref="Csv"/> dialect, a <see cref="Result{T, TError}"/> return and the same narrow
+/// exception filter — with the run id set first on every row, so rows from separate runs stay
+/// attributable when the files are concatenated.
 /// </para>
 /// </remarks>
 public static class BatchManifest
@@ -125,14 +124,16 @@ public static class BatchManifest
     /// <param name="directory">Where the run's sheets were written.</param>
     /// <param name="runId">The run identifier stamped onto every row, from <see cref="NewRunId"/>.</param>
     /// <param name="rows">One row per sheet, in the order they were baked.</param>
+    /// <param name="cancellationToken">Cancels between rows.</param>
     /// <returns>
     /// The row count, or <see cref="BakeFailure.OutputDirectoryUnavailable"/> when the folder is
     /// not there, or <see cref="BakeFailure.OutputWriteFailed"/> when it cannot be written.
     /// </returns>
-    public static Result<int, BakeFailure> WriteTo(
+    public static async Task<Result<int, BakeFailure>> WriteToAsync(
         FullPath directory,
         Guid runId,
-        IReadOnlyList<BatchManifestRow> rows)
+        IReadOnlyList<BatchManifestRow> rows,
+        CancellationToken cancellationToken = default)
     {
         Guard.IsNotNull(rows);
 
@@ -143,9 +144,9 @@ public static class BatchManifest
 
         try
         {
-            using var writer = new StreamWriter((directory / FileName).Value);
+            await using var writer = AsyncFiles.CreateText(directory / FileName);
 
-            return Write(writer, runId, rows);
+            return await WriteAsync(writer, runId, rows, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -153,27 +154,37 @@ public static class BatchManifest
         }
     }
 
-    private static int Write(TextWriter writer, Guid runId, IReadOnlyList<BatchManifestRow> rows)
+    private static async Task<int> WriteAsync(
+        TextWriter writer,
+        Guid runId,
+        IReadOnlyList<BatchManifestRow> rows,
+        CancellationToken cancellationToken)
     {
-        using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture, leaveOpen: true);
-
-        // WriteField before WriteHeader/WriteRecord appends to the record being built, which is
-        // how the run id lands in column one without duplicating every slot property into a
-        // wrapper record that would then need keeping in step with BatchManifestRow.
-        csv.WriteField(RunIdColumn);
-        csv.WriteHeader<BatchManifestRow>();
-        csv.NextRecord();
-
-        var identifier = runId.ToString("D", CultureInfo.InvariantCulture);
-
-        foreach (var row in rows)
+        await using (var csv = Csv.Writer(writer))
         {
-            csv.WriteField(identifier);
-            csv.WriteRecord(row);
-            csv.NextRecord();
-        }
+            foreach (var row in rows)
+            {
+                await using var line = csv.NewRow(cancellationToken);
 
-        csv.Flush();
+                // Columns are written in the order they are first set and the header is derived
+                // from that order, so setting the run id first is all it takes to lead with it.
+                line[RunIdColumn].Format(runId, "D");
+                line[nameof(row.Name)].Set(row.Name);
+                line[nameof(row.File)].Set(row.File);
+                line[nameof(row.Geometry)].Set(row.Geometry);
+                line[nameof(row.Tone)].Set(row.Tone);
+                line[nameof(row.Shadow)].Set(row.Shadow);
+                line[nameof(row.BackExtra)].Set(row.BackExtra);
+                line[nameof(row.BackHair)].Set(row.BackHair);
+                line[nameof(row.Bottom)].Set(row.Bottom);
+                line[nameof(row.Top)].Set(row.Top);
+                line[nameof(row.Head)].Set(row.Head);
+                line[nameof(row.Hair)].Set(row.Hair);
+                line[nameof(row.FrontExtra)].Set(row.FrontExtra);
+                line[nameof(row.Hat)].Set(row.Hat);
+                line[nameof(row.Weapon)].Set(row.Weapon);
+            }
+        }
 
         return rows.Count;
     }

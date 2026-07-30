@@ -327,7 +327,10 @@ public sealed partial class BatchExportViewModel : ObservableObject
                 cancellationToken);
 
             Report(summary);
-            WriteManifests(output, recipes);
+
+            // Deliberately not passed the run's token: the sheets are already on disk, so a
+            // cancelled run still needs its manifests or the files it did write are unindexed.
+            await WriteManifestsAsync(output, recipes);
         }
         finally
         {
@@ -393,9 +396,9 @@ public sealed partial class BatchExportViewModel : ObservableObject
     /// Which manifests a run calls for is <see cref="RunArtifacts"/>'s decision, not this page's —
     /// it is the same rule whoever asks, and it is testable there without a window.
     /// </remarks>
-    private void WriteManifests(FullPath output, ImmutableArray<SheetRecipe> recipes)
+    private async Task WriteManifestsAsync(FullPath output, ImmutableArray<SheetRecipe> recipes)
     {
-        foreach (var failure in RunArtifacts.WriteAll(output, BatchManifest.NewRunId(), recipes))
+        foreach (var failure in await RunArtifacts.WriteAllAsync(output, BatchManifest.NewRunId(), recipes))
         {
             Notify($"{failure.File} failed: {failure.Failure}.", StatusLevel.Error);
         }

@@ -32,14 +32,15 @@ public sealed class RunArtifactsTests
     /// A curated-only run must not leave a <c>clips.csv</c> describing files that are not there.
     /// </summary>
     [Fact]
-    public void WriteAll_OmitsTheFullIndex_ForACuratedOnlyRun()
+    public async Task WriteAll_OmitsTheFullIndex_ForACuratedOnlyRun()
     {
         using var root = TemporaryDirectory.Create();
 
-        var failures = RunArtifacts.WriteAll(
+        var failures = await RunArtifacts.WriteAllAsync(
             root.FullPath,
             BatchManifest.NewRunId(),
-            [Recipe("body-01", SheetGeometry.Curated)]);
+            [Recipe("body-01", SheetGeometry.Curated)],
+            TestContext.Current.CancellationToken);
 
         Assert.Empty(failures);
         Assert.True(Exists(root, SheetIndex.FileName));
@@ -47,14 +48,15 @@ public sealed class RunArtifactsTests
     }
 
     [Fact]
-    public void WriteAll_OmitsTheCuratedIndex_ForAFullOnlyRun()
+    public async Task WriteAll_OmitsTheCuratedIndex_ForAFullOnlyRun()
     {
         using var root = TemporaryDirectory.Create();
 
-        var failures = RunArtifacts.WriteAll(
+        var failures = await RunArtifacts.WriteAllAsync(
             root.FullPath,
             BatchManifest.NewRunId(),
-            [Recipe("raw-01", SheetGeometry.Full)]);
+            [Recipe("raw-01", SheetGeometry.Full)],
+            TestContext.Current.CancellationToken);
 
         Assert.Empty(failures);
         Assert.True(Exists(root, ClipIndex.FileName));
@@ -63,14 +65,15 @@ public sealed class RunArtifactsTests
 
     /// <summary>Both indexes appear when the run produced both geometries.</summary>
     [Fact]
-    public void WriteAll_WritesEveryArtifact_ForAMixedRun()
+    public async Task WriteAll_WritesEveryArtifact_ForAMixedRun()
     {
         using var root = TemporaryDirectory.Create();
 
-        var failures = RunArtifacts.WriteAll(
+        var failures = await RunArtifacts.WriteAllAsync(
             root.FullPath,
             BatchManifest.NewRunId(),
-            [Recipe("body-01", SheetGeometry.Curated), Recipe("raw-01", SheetGeometry.Full)]);
+            [Recipe("body-01", SheetGeometry.Curated), Recipe("raw-01", SheetGeometry.Full)],
+            TestContext.Current.CancellationToken);
 
         Assert.Empty(failures);
         Assert.True(Exists(root, SheetIndex.FileName));
@@ -85,16 +88,16 @@ public sealed class RunArtifactsTests
     /// with different ids and nothing would catch it, because both files would still parse.
     /// </summary>
     [Fact]
-    public void WriteAll_StampsTheSameRunIdIntoBothManifests()
+    public async Task WriteAll_StampsTheSameRunIdIntoBothManifests()
     {
         using var root = TemporaryDirectory.Create();
 
         var runId = BatchManifest.NewRunId();
 
-        RunArtifacts.WriteAll(root.FullPath, runId, [Recipe("body-01", SheetGeometry.Curated)]);
+        await RunArtifacts.WriteAllAsync(root.FullPath, runId, [Recipe("body-01", SheetGeometry.Curated)], TestContext.Current.CancellationToken);
 
-        var csv = File.ReadAllText((root.FullPath / BatchManifest.FileName).Value);
-        var json = File.ReadAllText((root.FullPath / RunManifest.FileName).Value);
+        var csv = await File.ReadAllTextAsync((root.FullPath / BatchManifest.FileName).Value, TestContext.Current.CancellationToken);
+        var json = await File.ReadAllTextAsync((root.FullPath / RunManifest.FileName).Value, TestContext.Current.CancellationToken);
 
         Assert.Contains(runId.ToString("D"), csv, StringComparison.Ordinal);
         Assert.Contains(runId.ToString("D"), json, StringComparison.Ordinal);
@@ -105,14 +108,15 @@ public sealed class RunArtifactsTests
     /// cannot cost the others — the sheets are already on disk by the time this runs.
     /// </summary>
     [Fact]
-    public void WriteAll_ReportsEveryFailure_WhenTheDirectoryIsAbsent()
+    public async Task WriteAll_ReportsEveryFailure_WhenTheDirectoryIsAbsent()
     {
         using var root = TemporaryDirectory.Create();
 
-        var failures = RunArtifacts.WriteAll(
+        var failures = await RunArtifacts.WriteAllAsync(
             root.FullPath / "absent",
             BatchManifest.NewRunId(),
-            [Recipe("body-01", SheetGeometry.Curated), Recipe("raw-01", SheetGeometry.Full)]);
+            [Recipe("body-01", SheetGeometry.Curated), Recipe("raw-01", SheetGeometry.Full)],
+            TestContext.Current.CancellationToken);
 
         // Both indexes plus both manifests.
         Assert.Equal(4, failures.Length);
@@ -126,11 +130,11 @@ public sealed class RunArtifactsTests
 
     /// <summary>An empty run still writes the run manifests, just with no sheets in them.</summary>
     [Fact]
-    public void WriteAll_HandlesARunWithNoRecipes()
+    public async Task WriteAll_HandlesARunWithNoRecipes()
     {
         using var root = TemporaryDirectory.Create();
 
-        var failures = RunArtifacts.WriteAll(root.FullPath, BatchManifest.NewRunId(), []);
+        var failures = await RunArtifacts.WriteAllAsync(root.FullPath, BatchManifest.NewRunId(), [], TestContext.Current.CancellationToken);
 
         Assert.False(Exists(root, SheetIndex.FileName));
         Assert.False(Exists(root, ClipIndex.FileName));

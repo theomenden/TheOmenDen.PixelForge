@@ -122,7 +122,6 @@ public partial class App : Application
         Log.Information("PixelForge starting. Logs: {LogDirectory}", AppPaths.Logs);
 
         Services.GetRequiredService<SourcePackService>().Load();
-        Services.GetRequiredService<RampService>().Load();
 
         // Explicit rather than left to SourcePackService.Load's Changed event: nothing has
         // resolved CatalogService yet at that point, so its subscription is not live and a first
@@ -132,6 +131,13 @@ public partial class App : Application
         _window = new MainWindow();
         _window.Closed += OnMainWindowClosed;
         _window.Activate();
+
+        // Custom ramps land after the window is up rather than holding the launch on file I/O.
+        // Safe to leave unawaited: RampService.Ramps already holds the seven built-ins, so the
+        // palette page is populated either way and the customs appear when the read completes.
+        // LoadAsync returns its failures rather than throwing and logs them itself, so there is
+        // no exception here to observe.
+        _ = Services.GetRequiredService<RampService>().LoadAsync();
     }
 
     private void OnMainWindowClosed(object sender, WindowEventArgs args)

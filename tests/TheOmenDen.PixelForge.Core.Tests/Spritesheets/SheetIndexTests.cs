@@ -49,11 +49,11 @@ public sealed class SheetIndexTests : IDisposable
     }
 
     [Fact]
-    public void Write_EmitsAHeaderAndOneLinePerRow()
+    public async Task Write_EmitsAHeaderAndOneLinePerRow()
     {
         using var writer = new StringWriter();
 
-        var count = SheetIndex.Write(writer);
+        var count = await SheetIndex.WriteAsync(writer, TestContext.Current.CancellationToken);
 
         var lines = writer.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
@@ -63,18 +63,18 @@ public sealed class SheetIndexTests : IDisposable
     }
 
     [Fact]
-    public void WriteTo_PutsIndexCsvBesideTheSheets()
+    public async Task WriteTo_PutsIndexCsvBesideTheSheets()
     {
-        var result = SheetIndex.WriteTo(_directory.FullPath);
+        var result = await SheetIndex.WriteToAsync(_directory.FullPath, TestContext.Current.CancellationToken);
 
         Assert.True(result.IsSuccessful, $"write failed with {result.Error}");
         Assert.True(File.Exists((_directory.FullPath / "index.csv").Value));
     }
 
     [Fact]
-    public void WriteTo_ReportsOutputDirectoryUnavailable_WhenTheDirectoryIsMissing()
+    public async Task WriteTo_ReportsOutputDirectoryUnavailable_WhenTheDirectoryIsMissing()
     {
-        var result = SheetIndex.WriteTo(_directory.FullPath / "nope");
+        var result = await SheetIndex.WriteToAsync(_directory.FullPath / "nope", TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccessful);
         Assert.Equal(BakeFailure.OutputDirectoryUnavailable, result.Error);

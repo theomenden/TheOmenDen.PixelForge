@@ -3,6 +3,11 @@
   <PropertyGroup>
     <!-- Platform-agnostic on purpose: no WinUI/Windows types in here. -->
     <TargetFramework>net10.0</TargetFramework>
+    <!-- Turns on the trim, AOT and single-file analyzers and stamps IsTrimmable metadata.
+         With TreatWarningsAsErrors, any IL2xxx/IL3xxx here is a build break — which is the
+         point: Core is the half of the app that must stay reflection-free, and the analyzer
+         is what enforces standing rule 2 rather than review. -->
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
 
   <ItemGroup>
@@ -34,7 +39,8 @@
     <PackageReference Include="Meziantou.Framework.TemporaryDirectory" />
     <!-- Sanitises a ramp name into the tone segment of a baked sheet's stem. -->
     <PackageReference Include="Meziantou.Framework.Slug" />
-    <PackageReference Include="CsvHelper" />
+    <!-- Reflection-free CSV. See Csv.cs for the dialect and the defaults it corrects. -->
+    <PackageReference Include="Sep" />
   </ItemGroup>
 
   <ItemGroup>

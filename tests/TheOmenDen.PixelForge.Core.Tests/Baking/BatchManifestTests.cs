@@ -43,17 +43,17 @@ public sealed class BatchManifestTests
     public void NewRunId_IsAVersion7Uuid() => Assert.Equal(7, BatchManifest.NewRunId().Version);
 
     [Fact]
-    public void WriteTo_RecordsEveryRowAgainstTheRunId()
+    public async Task WriteTo_RecordsEveryRowAgainstTheRunId()
     {
         using var root = TemporaryDirectory.Create();
 
         var runId = BatchManifest.NewRunId();
-        var written = BatchManifest.WriteTo(root.FullPath, runId, [Row("a"), Row("b")]);
+        var written = await BatchManifest.WriteToAsync(root.FullPath, runId, [Row("a"), Row("b")], TestContext.Current.CancellationToken);
 
         Assert.True(written.IsSuccessful, $"write failed with {written.Error}");
         Assert.Equal(2, written.Value);
 
-        var text = File.ReadAllText((root.FullPath / BatchManifest.FileName).Value);
+        var text = await File.ReadAllTextAsync((root.FullPath / BatchManifest.FileName).Value, TestContext.Current.CancellationToken);
 
         Assert.Contains(runId.ToString("D"), text, StringComparison.Ordinal);
         Assert.Contains("top11", text, StringComparison.Ordinal);
@@ -68,11 +68,11 @@ public sealed class BatchManifestTests
     }
 
     [Fact]
-    public void WriteTo_ReportsOutputDirectoryUnavailable_WhenTheFolderIsAbsent()
+    public async Task WriteTo_ReportsOutputDirectoryUnavailable_WhenTheFolderIsAbsent()
     {
         using var root = TemporaryDirectory.Create();
 
-        var result = BatchManifest.WriteTo(root.FullPath / "absent", BatchManifest.NewRunId(), [Row("a")]);
+        var result = await BatchManifest.WriteToAsync(root.FullPath / "absent", BatchManifest.NewRunId(), [Row("a")], TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccessful);
         Assert.Equal(BakeFailure.OutputDirectoryUnavailable, result.Error);
@@ -147,13 +147,13 @@ public sealed class BatchManifestTests
 
     /// <summary>An empty slot must be an empty cell, not the string "null".</summary>
     [Fact]
-    public void WriteTo_LeavesUnusedSlotsBlank()
+    public async Task WriteTo_LeavesUnusedSlotsBlank()
     {
         using var root = TemporaryDirectory.Create();
 
-        BatchManifest.WriteTo(root.FullPath, BatchManifest.NewRunId(), [Row("a")]);
+        await BatchManifest.WriteToAsync(root.FullPath, BatchManifest.NewRunId(), [Row("a")], TestContext.Current.CancellationToken);
 
-        var text = File.ReadAllText((root.FullPath / BatchManifest.FileName).Value);
+        var text = await File.ReadAllTextAsync((root.FullPath / BatchManifest.FileName).Value, TestContext.Current.CancellationToken);
 
         Assert.DoesNotContain("null", text, StringComparison.OrdinalIgnoreCase);
     }

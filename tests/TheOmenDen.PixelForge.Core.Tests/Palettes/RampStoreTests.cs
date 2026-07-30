@@ -25,18 +25,18 @@ public sealed class RampStoreTests : IDisposable
     };
 
     [Fact]
-    public void ReadWrite_RoundTripsARamp()
+    public async Task ReadWrite_RoundTripsARamp()
     {
         using var writer = new StringWriter();
 
-        var written = RampStore.Write(writer, [Custom("My Ramp")]);
+        var written = await RampStore.WriteAsync(writer, [Custom("My Ramp")], TestContext.Current.CancellationToken);
 
         Assert.True(written.IsSuccessful, $"write failed with {written.Error}");
         Assert.Equal(1, written.Value);
 
         using var reader = new StringReader(writer.ToString());
 
-        var read = RampStore.Read(reader);
+        var read = await RampStore.ReadAsync(reader, TestContext.Current.CancellationToken);
 
         Assert.True(read.IsSuccessful, $"read failed with {read.Error}");
 
@@ -54,15 +54,15 @@ public sealed class RampStoreTests : IDisposable
     /// identical, or the format cannot represent what we already ship.
     /// </summary>
     [Fact]
-    public void ReadWrite_RoundTripsEveryBuiltInRamp()
+    public async Task ReadWrite_RoundTripsEveryBuiltInRamp()
     {
         using var writer = new StringWriter();
 
-        RampStore.Write(writer, [.. SkinRamps.All]);
+        await RampStore.WriteAsync(writer, [.. SkinRamps.All], TestContext.Current.CancellationToken);
 
         using var reader = new StringReader(writer.ToString());
 
-        var read = RampStore.Read(reader);
+        var read = await RampStore.ReadAsync(reader, TestContext.Current.CancellationToken);
 
         Assert.True(read.IsSuccessful, $"read failed with {read.Error}");
         Assert.Equal(SkinRamps.All.Length, read.Value.Length);
@@ -76,7 +76,7 @@ public sealed class RampStoreTests : IDisposable
     }
 
     [Fact]
-    public void Read_ReportsStoreMalformed_WhenAStepIsNotHex()
+    public async Task Read_ReportsStoreMalformed_WhenAStepIsNotHex()
     {
         using var reader = new StringReader(
             """
@@ -84,14 +84,14 @@ public sealed class RampStoreTests : IDisposable
             Bad,False,#GGGGGG,#445566,#778899,#AABBCC,#DDEEFF
             """);
 
-        var read = RampStore.Read(reader);
+        var read = await RampStore.ReadAsync(reader, TestContext.Current.CancellationToken);
 
         Assert.False(read.IsSuccessful);
         Assert.Equal(RampFailure.StoreMalformed, read.Error);
     }
 
     [Fact]
-    public void Read_ReportsNameEmpty_WhenARampHasNoName()
+    public async Task Read_ReportsNameEmpty_WhenARampHasNoName()
     {
         using var reader = new StringReader(
             """
@@ -99,14 +99,14 @@ public sealed class RampStoreTests : IDisposable
             ,False,#112233,#445566,#778899,#AABBCC,#DDEEFF
             """);
 
-        var read = RampStore.Read(reader);
+        var read = await RampStore.ReadAsync(reader, TestContext.Current.CancellationToken);
 
         Assert.False(read.IsSuccessful);
         Assert.Equal(RampFailure.NameEmpty, read.Error);
     }
 
     [Fact]
-    public void Read_ReportsDuplicateName_WhenTwoRampsShareOne()
+    public async Task Read_ReportsDuplicateName_WhenTwoRampsShareOne()
     {
         using var reader = new StringReader(
             """
@@ -115,14 +115,14 @@ public sealed class RampStoreTests : IDisposable
             Same,False,#112233,#445566,#778899,#AABBCC,#DDEEFF
             """);
 
-        var read = RampStore.Read(reader);
+        var read = await RampStore.ReadAsync(reader, TestContext.Current.CancellationToken);
 
         Assert.False(read.IsSuccessful);
         Assert.Equal(RampFailure.DuplicateName, read.Error);
     }
 
     [Fact]
-    public void Write_ReportsWrongStepCount_WhenARampIsNotFiveSteps()
+    public async Task Write_ReportsWrongStepCount_WhenARampIsNotFiveSteps()
     {
         using var writer = new StringWriter();
 
@@ -133,33 +133,33 @@ public sealed class RampStoreTests : IDisposable
             Steps = [new SKColor(1, 2, 3)],
         };
 
-        var written = RampStore.Write(writer, [truncated]);
+        var written = await RampStore.WriteAsync(writer, [truncated], TestContext.Current.CancellationToken);
 
         Assert.False(written.IsSuccessful);
         Assert.Equal(RampFailure.WrongStepCount, written.Error);
     }
 
     [Fact]
-    public void Load_ReturnsEmpty_WhenTheFileDoesNotExist()
+    public async Task Load_ReturnsEmpty_WhenTheFileDoesNotExist()
     {
         var store = new RampStore(_directory.FullPath / "absent.csv");
 
-        var loaded = store.Load();
+        var loaded = await store.LoadAsync(TestContext.Current.CancellationToken);
 
         Assert.True(loaded.IsSuccessful, $"load failed with {loaded.Error}");
         Assert.Empty(loaded.Value);
     }
 
     [Fact]
-    public void SaveLoad_RoundTripsThroughDisk()
+    public async Task SaveLoad_RoundTripsThroughDisk()
     {
         var store = new RampStore(_directory.FullPath / "ramps.csv");
 
-        var saved = store.Save([Custom("Disk Ramp")]);
+        var saved = await store.SaveAsync([Custom("Disk Ramp")], TestContext.Current.CancellationToken);
 
         Assert.True(saved.IsSuccessful, $"save failed with {saved.Error}");
 
-        var loaded = store.Load();
+        var loaded = await store.LoadAsync(TestContext.Current.CancellationToken);
 
         Assert.True(loaded.IsSuccessful, $"load failed with {loaded.Error}");
         Assert.Equal("Disk Ramp", Assert.Single(loaded.Value.AsSpan().ToArray()).Name);
@@ -167,11 +167,11 @@ public sealed class RampStoreTests : IDisposable
 
     /// <summary>Saving into a directory that does not exist creates it rather than failing.</summary>
     [Fact]
-    public void Save_CreatesTheParentDirectory()
+    public async Task Save_CreatesTheParentDirectory()
     {
         var store = new RampStore(_directory.FullPath / "nested" / "ramps.csv");
 
-        var saved = store.Save([Custom("Nested")]);
+        var saved = await store.SaveAsync([Custom("Nested")], TestContext.Current.CancellationToken);
 
         Assert.True(saved.IsSuccessful, $"save failed with {saved.Error}");
         Assert.True(File.Exists((_directory.FullPath / "nested" / "ramps.csv").Value));

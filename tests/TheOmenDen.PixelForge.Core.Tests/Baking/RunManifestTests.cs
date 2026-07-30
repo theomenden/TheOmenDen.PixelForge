@@ -19,7 +19,7 @@ namespace TheOmenDen.PixelForge.Core.Tests.Baking;
 /// </summary>
 /// <remarks>
 /// <para>
-/// A successful <see cref="RunManifest.Write"/> is itself the schema assertion: the writer parses
+/// A successful <see cref="RunManifest.WriteAsync"/> is itself the schema assertion: the writer parses
 /// its own output and runs <c>EvaluateSchema()</c> before yielding a count, so a document that
 /// violates <c>pixelforge-manifest-v1.json</c> comes back as
 /// <see cref="BakeFailure.ManifestSchemaViolation"/> with nothing written. Every
@@ -54,11 +54,11 @@ public sealed class RunManifestTests
         };
 
     /// <summary>Writes the manifest and hands back its parsed root.</summary>
-    private static JsonDocument Manifest(params SheetRecipe[] recipes)
+    private static async Task<JsonDocument> ManifestAsync(params SheetRecipe[] recipes)
     {
         using var stream = new MemoryStream();
 
-        var written = RunManifest.Write(stream, BatchManifest.NewRunId(), [.. recipes]);
+        var written = await RunManifest.WriteAsync(stream, BatchManifest.NewRunId(), [.. recipes], TestContext.Current.CancellationToken);
 
         Assert.True(written.IsSuccessful, $"manifest failed its own schema with {written.Error}");
         Assert.Equal(recipes.Length, written.Value);
@@ -117,12 +117,12 @@ public sealed class RunManifestTests
     }
 
     [Fact]
-    public void Write_StampsTheRunIdAndSchemaVersion()
+    public async Task Write_StampsTheRunIdAndSchemaVersion()
     {
         using var stream = new MemoryStream();
 
         var runId = BatchManifest.NewRunId();
-        var written = RunManifest.Write(stream, runId, [Recipe("body-01")]);
+        var written = await RunManifest.WriteAsync(stream, runId, [Recipe("body-01")], TestContext.Current.CancellationToken);
 
         Assert.True(written.IsSuccessful, $"manifest failed its own schema with {written.Error}");
 
@@ -146,11 +146,11 @@ public sealed class RunManifestTests
     /// against a v1 schema would ship looking perfectly well-formed.
     /// </remarks>
     [Fact]
-    public void EvaluateSchema_RejectsAManifestCarryingTheWrongVersion()
+    public async Task EvaluateSchema_RejectsAManifestCarryingTheWrongVersion()
     {
         using var stream = new MemoryStream();
 
-        RunManifest.Write(stream, BatchManifest.NewRunId(), [Recipe("body-01")]);
+        await RunManifest.WriteAsync(stream, BatchManifest.NewRunId(), [Recipe("body-01")], TestContext.Current.CancellationToken);
 
         var json = Encoding.UTF8.GetString(stream.ToArray());
 
@@ -176,9 +176,9 @@ public sealed class RunManifestTests
     /// </summary>
     /// <remarks>See <see cref="AssertExactProperties"/> for why this cannot be left to the schema.</remarks>
     [Fact]
-    public void Write_EmitsExactlyTheExpectedProperties_AtRunLevel()
+    public async Task Write_EmitsExactlyTheExpectedProperties_AtRunLevel()
     {
-        using var manifest = Manifest(
+        using var manifest = await ManifestAsync(
             Recipe("body-01", tone: SkinRamps.All[1]),
             Recipe("hair-01"));
 
@@ -205,9 +205,9 @@ public sealed class RunManifestTests
     /// </summary>
     /// <remarks>See <see cref="AssertExactProperties"/> for why this cannot be left to the schema.</remarks>
     [Fact]
-    public void Write_EmitsExactlyTheExpectedProperties_AtLayoutLevel()
+    public async Task Write_EmitsExactlyTheExpectedProperties_AtLayoutLevel()
     {
-        using var manifest = Manifest(Recipe("body-01"), Recipe("raw-01", SheetGeometry.Full));
+        using var manifest = await ManifestAsync(Recipe("body-01"), Recipe("raw-01", SheetGeometry.Full));
 
         var curated = Layouts(manifest).GetProperty("curated");
         var full = Layouts(manifest).GetProperty("full");
@@ -247,7 +247,7 @@ public sealed class RunManifestTests
 
     /// <summary>The version is declared once, in the schema, and read back out of it.</summary>
     [Fact]
-    public void SchemaVersion_ComesFromTheSchemaItself()
+    public async Task SchemaVersion_ComesFromTheSchemaItself()
     {
         Assert.Equal("1.0.0", RunManifest.SchemaVersion);
         Assert.Contains(
@@ -266,7 +266,7 @@ public sealed class RunManifestTests
     /// <c>1</c>, or the assertion would pass vacuously after a v2 bump and defeat its own purpose.
     /// </remarks>
     [Fact]
-    public void SchemaId_AgreesWithTheFileNameAndTheMajorVersion()
+    public async Task SchemaId_AgreesWithTheFileNameAndTheMajorVersion()
     {
         using var schema = JsonDocument.Parse(RunManifest.SchemaText);
 
@@ -289,27 +289,27 @@ public sealed class RunManifestTests
     /// <c>clips.csv</c> — a manifest never describes files that are not in the folder.
     /// </summary>
     [Fact]
-    public void Write_OmitsTheFullLayout_ForACuratedOnlyRun()
+    public async Task Write_OmitsTheFullLayout_ForACuratedOnlyRun()
     {
-        using var manifest = Manifest(Recipe("body-01"), Recipe("body-02"));
+        using var manifest = await ManifestAsync(Recipe("body-01"), Recipe("body-02"));
 
         Assert.True(Layouts(manifest).TryGetProperty("curated", out _));
         Assert.False(Layouts(manifest).TryGetProperty("full", out _));
     }
 
     [Fact]
-    public void Write_OmitsTheCuratedLayout_ForAFullOnlyRun()
+    public async Task Write_OmitsTheCuratedLayout_ForAFullOnlyRun()
     {
-        using var manifest = Manifest(Recipe("raw-01", SheetGeometry.Full));
+        using var manifest = await ManifestAsync(Recipe("raw-01", SheetGeometry.Full));
 
         Assert.True(Layouts(manifest).TryGetProperty("full", out _));
         Assert.False(Layouts(manifest).TryGetProperty("curated", out _));
     }
 
     [Fact]
-    public void Write_DescribesBothGeometries_WhenTheRunProducedBoth()
+    public async Task Write_DescribesBothGeometries_WhenTheRunProducedBoth()
     {
-        using var manifest = Manifest(Recipe("body-01"), Recipe("raw-01", SheetGeometry.Full));
+        using var manifest = await ManifestAsync(Recipe("body-01"), Recipe("raw-01", SheetGeometry.Full));
 
         Assert.True(Layouts(manifest).TryGetProperty("curated", out _));
         Assert.True(Layouts(manifest).TryGetProperty("full", out _));
@@ -320,9 +320,9 @@ public sealed class RunManifestTests
     /// consumer of a curated sheet had to guess the cadence the art was authored for.
     /// </summary>
     [Fact]
-    public void Write_StatesTheFrameDuration_ForCuratedSheets()
+    public async Task Write_StatesTheFrameDuration_ForCuratedSheets()
     {
-        using var manifest = Manifest(Recipe("body-01"));
+        using var manifest = await ManifestAsync(Recipe("body-01"));
 
         var curated = Layouts(manifest).GetProperty("curated");
 
@@ -338,9 +338,9 @@ public sealed class RunManifestTests
     /// the remap the baker performs.
     /// </summary>
     [Fact]
-    public void Write_StatesEachCuratedClipRowPerFacing()
+    public async Task Write_StatesEachCuratedClipRowPerFacing()
     {
-        using var manifest = Manifest(Recipe("body-01"));
+        using var manifest = await ManifestAsync(Recipe("body-01"));
 
         var clips = Layouts(manifest).GetProperty("curated").GetProperty("clips");
 
@@ -364,9 +364,9 @@ public sealed class RunManifestTests
     /// 1, 2, 1, 0. Re-sorting them is the obvious mistake, so the order is asserted verbatim.
     /// </summary>
     [Fact]
-    public void Write_KeepsFullClipColumnsInPlaybackOrder()
+    public async Task Write_KeepsFullClipColumnsInPlaybackOrder()
     {
-        using var manifest = Manifest(Recipe("raw-01", SheetGeometry.Full));
+        using var manifest = await ManifestAsync(Recipe("raw-01", SheetGeometry.Full));
 
         var clips = Layouts(manifest).GetProperty("full").GetProperty("clips");
         var walk = GeneratorClips.All.AsSpan().First(clip => clip.Name is "walk");
@@ -400,9 +400,9 @@ public sealed class RunManifestTests
     /// and nothing else, leaving a consumer no way to match a UI swatch to the art.
     /// </summary>
     [Fact]
-    public void Write_CarriesTheSourceRampAsHexSteps()
+    public async Task Write_CarriesTheSourceRampAsHexSteps()
     {
-        using var manifest = Manifest(Recipe("body-01"));
+        using var manifest = await ManifestAsync(Recipe("body-01"));
 
         var source = manifest.RootElement.GetProperty("palette").GetProperty("sourceRamp");
         var steps = source.GetProperty("steps");
@@ -418,11 +418,11 @@ public sealed class RunManifestTests
 
     /// <summary>Only the tones the run actually applied, and each of them exactly once.</summary>
     [Fact]
-    public void Write_CarriesEachAppliedToneOnce()
+    public async Task Write_CarriesEachAppliedToneOnce()
     {
         var green = SkinRamps.All.AsSpan().First(ramp => !ramp.IsHuman);
 
-        using var manifest = Manifest(
+        using var manifest = await ManifestAsync(
             Recipe("body-01", tone: green),
             Recipe("body-02", tone: green),
             Recipe("body-03", tone: SkinRamps.All[1]));
@@ -437,9 +437,9 @@ public sealed class RunManifestTests
 
     /// <summary>A run that applied no tone carries an empty array, never a missing property.</summary>
     [Fact]
-    public void Write_CarriesAnEmptyRampArray_WhenNoToneWasApplied()
+    public async Task Write_CarriesAnEmptyRampArray_WhenNoToneWasApplied()
     {
-        using var manifest = Manifest(Recipe("hair-01"));
+        using var manifest = await ManifestAsync(Recipe("hair-01"));
 
         Assert.Equal(0, manifest.RootElement.GetProperty("palette").GetProperty("ramps").GetArrayLength());
     }
@@ -450,9 +450,9 @@ public sealed class RunManifestTests
     /// <c>"curated"</c>.
     /// </summary>
     [Fact]
-    public void Write_NamesGeometryWithTheLayoutKeyItPointsAt()
+    public async Task Write_NamesGeometryWithTheLayoutKeyItPointsAt()
     {
-        using var manifest = Manifest(Recipe("body-01"), Recipe("raw-01", SheetGeometry.Full));
+        using var manifest = await ManifestAsync(Recipe("body-01"), Recipe("raw-01", SheetGeometry.Full));
 
         var sheets = manifest.RootElement.GetProperty("sheets");
 
@@ -470,9 +470,9 @@ public sealed class RunManifestTests
     /// the CSV has to write.
     /// </summary>
     [Fact]
-    public void Write_OmitsSlotsTheRecipeNeverFilled()
+    public async Task Write_OmitsSlotsTheRecipeNeverFilled()
     {
-        using var manifest = Manifest(Recipe("body-01"));
+        using var manifest = await ManifestAsync(Recipe("body-01"));
 
         var slots = manifest.RootElement.GetProperty("sheets")[0].GetProperty("slots");
 
@@ -485,17 +485,17 @@ public sealed class RunManifestTests
 
     /// <summary>A sheet with no skin carries no tone property at all.</summary>
     [Fact]
-    public void Write_OmitsToneForASheetWithNoSkin()
+    public async Task Write_OmitsToneForASheetWithNoSkin()
     {
-        using var manifest = Manifest(Recipe("hair-01"));
+        using var manifest = await ManifestAsync(Recipe("hair-01"));
 
         Assert.False(manifest.RootElement.GetProperty("sheets")[0].TryGetProperty("tone", out _));
     }
 
     [Fact]
-    public void Write_NamesTheOutputFileWithItsExtension()
+    public async Task Write_NamesTheOutputFileWithItsExtension()
     {
-        using var manifest = Manifest(Recipe("body-01"));
+        using var manifest = await ManifestAsync(Recipe("body-01"));
 
         var sheet = manifest.RootElement.GetProperty("sheets")[0];
 
@@ -508,11 +508,11 @@ public sealed class RunManifestTests
     /// build coupling, so the schema travels with the manifest that declares it.
     /// </summary>
     [Fact]
-    public void WriteTo_CopiesTheSchemaBesideTheManifest()
+    public async Task WriteTo_CopiesTheSchemaBesideTheManifest()
     {
         using var root = TemporaryDirectory.Create();
 
-        var written = RunManifest.WriteTo(root.FullPath, BatchManifest.NewRunId(), [Recipe("body-01")]);
+        var written = await RunManifest.WriteToAsync(root.FullPath, BatchManifest.NewRunId(), [Recipe("body-01")], TestContext.Current.CancellationToken);
 
         Assert.True(written.IsSuccessful, $"write failed with {written.Error}");
         Assert.Equal(1, written.Value);
@@ -523,16 +523,16 @@ public sealed class RunManifestTests
         Assert.True(File.Exists(schema));
 
         // The copy is the schema the generator compiled against, not a paraphrase of it.
-        Assert.Equal(RunManifest.SchemaText, File.ReadAllText(schema));
+        Assert.Equal(RunManifest.SchemaText, await File.ReadAllTextAsync(schema, TestContext.Current.CancellationToken));
         Assert.Contains("\"$id\"", RunManifest.SchemaText, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void WriteTo_ReportsOutputDirectoryUnavailable_WhenTheFolderIsAbsent()
+    public async Task WriteTo_ReportsOutputDirectoryUnavailable_WhenTheFolderIsAbsent()
     {
         using var root = TemporaryDirectory.Create();
 
-        var result = RunManifest.WriteTo(root.FullPath / "absent", BatchManifest.NewRunId(), [Recipe("body-01")]);
+        var result = await RunManifest.WriteToAsync(root.FullPath / "absent", BatchManifest.NewRunId(), [Recipe("body-01")], TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccessful);
         Assert.Equal(BakeFailure.OutputDirectoryUnavailable, result.Error);

@@ -1,10 +1,9 @@
 using System.Collections.Immutable;
-using System.Globalization;
 using CommunityToolkit.Diagnostics;
-using CsvHelper;
 using DotNext;
 using Meziantou.Framework;
 using TheOmenDen.PixelForge.Core.Baking;
+using TheOmenDen.PixelForge.Core.Buffers;
 
 namespace TheOmenDen.PixelForge.Core.Spritesheets;
 
@@ -55,20 +54,41 @@ public static class SheetIndex
     }
 
     /// <summary>Writes the manifest and returns the row count.</summary>
-    public static int Write(TextWriter writer)
+    /// <param name="writer">The destination, left open.</param>
+    /// <param name="cancellationToken">Cancels between rows.</param>
+    /// <returns>The number of rows written, which is always <see cref="Rows"/>'s length.</returns>
+    public static async Task<int> WriteAsync(TextWriter writer, CancellationToken cancellationToken = default)
     {
         Guard.IsNotNull(writer);
 
-        using var csv = new CsvWriter(writer, CultureInfo.InvariantCulture, leaveOpen: true);
+        await using (var csv = Csv.Writer(writer))
+        {
+            foreach (var row in Rows)
+            {
+                await using var line = csv.NewRow(cancellationToken);
 
-        csv.WriteRecords(Rows);
-        csv.Flush();
+                line[nameof(row.Clip)].Set(row.Clip);
+                line[nameof(row.Facing)].Set(row.Facing);
+                line[nameof(row.Row)].Format(row.Row);
+                line[nameof(row.FrameCount)].Format(row.FrameCount);
+                line[nameof(row.FirstColumn)].Format(row.FirstColumn);
+                line[nameof(row.CellSize)].Format(row.CellSize);
+            }
+        }
 
         return Rows.Length;
     }
 
     /// <summary>Writes <c>index.csv</c> into an export directory.</summary>
-    public static Result<int, BakeFailure> WriteTo(FullPath directory)
+    /// <param name="directory">Where the run's sheets were written.</param>
+    /// <param name="cancellationToken">Cancels between rows.</param>
+    /// <returns>
+    /// The row count, or <see cref="BakeFailure.OutputDirectoryUnavailable"/> when the folder is
+    /// not there, or <see cref="BakeFailure.OutputWriteFailed"/> when it cannot be written.
+    /// </returns>
+    public static async Task<Result<int, BakeFailure>> WriteToAsync(
+        FullPath directory,
+        CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(directory.Value))
         {
@@ -77,9 +97,9 @@ public static class SheetIndex
 
         try
         {
-            using var writer = new StreamWriter((directory / FileName).Value);
+            await using var writer = AsyncFiles.CreateText(directory / FileName);
 
-            return Write(writer);
+            return await WriteAsync(writer, cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

@@ -51,11 +51,11 @@ public sealed class ClipIndexTests
         => Assert.All(ClipIndex.Rows, row => Assert.Equal(GeneratorClips.FrameDurationMilliseconds, row.FrameDurationMs));
 
     [Fact]
-    public void WriteTo_WritesTheManifestAndReportsTheRowCount()
+    public async Task WriteTo_WritesTheManifestAndReportsTheRowCount()
     {
         using var root = TemporaryDirectory.Create();
 
-        var written = ClipIndex.WriteTo(root.FullPath);
+        var written = await ClipIndex.WriteToAsync(root.FullPath, TestContext.Current.CancellationToken);
 
         Assert.True(written.IsSuccessful, $"write failed with {written.Error}");
         Assert.Equal(ClipIndex.Rows.Length, written.Value);
@@ -63,11 +63,11 @@ public sealed class ClipIndexTests
     }
 
     [Fact]
-    public void WriteTo_ReportsOutputDirectoryUnavailable_WhenTheFolderIsAbsent()
+    public async Task WriteTo_ReportsOutputDirectoryUnavailable_WhenTheFolderIsAbsent()
     {
         using var root = TemporaryDirectory.Create();
 
-        var result = ClipIndex.WriteTo(root.FullPath / "absent");
+        var result = await ClipIndex.WriteToAsync(root.FullPath / "absent", TestContext.Current.CancellationToken);
 
         Assert.False(result.IsSuccessful);
         Assert.Equal(BakeFailure.OutputDirectoryUnavailable, result.Error);

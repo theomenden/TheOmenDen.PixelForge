@@ -15,7 +15,8 @@ batch import, conversion, and processing.
 | Perf | CommunityToolkit.HighPerformance, DotNext (+ Threading/IO/Unsafe), RecyclableMemoryStream |
 | LINQ | **ZLinq** (drop-in generator) — replaces System.Linq project-wide |
 | Source gen | Riok.Mapperly (mapping), Meziantou.StronglyTypedId (ids) |
-| Domain types | Meziantou.Framework: FullPath, ByteSize, Globbing, TemporaryDirectory · CsvHelper |
+| Domain types | Meziantou.Framework: FullPath, ByteSize, Globbing, TemporaryDirectory |
+| CSV | **Sep** — reflection-free, no object mapper; `Core/Csv.cs` holds the dialect |
 | Host | Microsoft.Extensions.Hosting — DI container + `appsettings.json`, built in `App.xaml.cs` |
 | Logging | Serilog via `ILogger<T>`; Debug + Console + async rolling CLEF file |
 | Tests | xUnit v3 (logic) + `winapp ui` automation (UI) |
@@ -31,6 +32,7 @@ Directory.Packages.props       all package versions (CPM)
 src/
   TheOmenDen.PixelForge/       WinUI app — Views, ViewModels, XAML. Windows-only.
   TheOmenDen.PixelForge.Core/  net10.0 class library — image/palette/pipeline logic. NO Windows types.
+                               IsAotCompatible — trim/AOT analyzers on, warnings are errors.
 tests/
   TheOmenDen.PixelForge.Core.Tests/  xUnit v3
   ui-tests.ps1                       winapp UI automation harness
@@ -72,7 +74,26 @@ Types over primitives — the Meziantou set exists to stop primitive obsession b
 | hand-rolled `*.png` matching | `Meziantou.Framework.Globbing` — gitignore-style patterns |
 | `Path.GetTempPath()` + manual cleanup | `TemporaryDirectory` — disposable, self-deleting |
 
-`CsvHelper` for palette and sprite-sheet index import/export.
+**Sep** for palette and sprite-sheet index import/export — `ramps.csv`, `index.csv`, `clips.csv`,
+`sheets.csv`. It replaced CsvHelper, and the replacement is not like-for-like:
+
+- **There is no object mapper.** No `GetRecords<T>()`, no `WriteRecords`, no `[Ignore]`. Every
+  column is named at the call site: `row["Clip"].Set(...)` / `row["Row"].Format(...)`. That is the
+  point — CsvHelper bound rows to properties reflectively, which is what kept `Core` off
+  `IsAotCompatible`. Do not reintroduce a mapper; a row DTO that exists only to be mapped is the
+  smell (`RampRow` was one and is gone).
+- **Both of Sep's defaults are wrong here and fail silently**: its separator is `;`, and escaping
+  is *off*, so an unescaped `Ash, Pale` would split into two columns. Go through `Core/Csv.cs`
+  (`Csv.Writer` / `Csv.Reader`), which pins `,` and `Strict()`. Never construct a
+  `SepReader`/`SepWriter` directly.
+- `Format<T>` needs `ISpanFormattable`, which **`bool` is not** (it *is* `ISpanParsable`, so
+  reading back is fine). Write bools as `value ? bool.TrueString : bool.FalseString`.
+- The header comes from the column names of the **first row**, in the order set — so column order
+  is call order, and an empty sequence writes an empty file rather than a lone header.
+- Malformed input surfaces as `InvalidDataException` **during enumeration**, not at construction,
+  so the whole `foreach` belongs inside the `try`. Use `row.TryGet(name, out var col)` and
+  `col.TryParse<T>(out ...)` — the throwing overloads turn expected bad input into an exception,
+  against standing rule 5.
 
 **Prereleases in use:** SkiaSharp `4.151.0-rc.1.1`, RecyclableMemoryStream `4.0.0-preview`, and the
 CommunityToolkit.WinUI `8.3.*-preview2` set. Each is the newest published build of its package.
@@ -303,6 +324,26 @@ back a fresh buffer.
 Pixel buffers are not streams: `SKBitmap.Pixels` allocates an `SKColor[]` per call — 828 KiB for a
 source partial, straight to the LOH. Read pixel memory through `PeekPixels()` / `GetPixelSpan()`,
 and use `Span2D<T>` for 2D block moves instead of hand-rolled stride arithmetic.
+
+**7. Open files through `AsyncFiles`. `async` without `FileOptions.Asynchronous` is a lie.**
+
+A `FileStream` opened without that flag has no overlapped handle behind it, so `WriteAsync` on it is
+not asynchronous: the runtime queues the blocking call to a thread-pool thread and awaits *that*.
+The `await` compiles, the code reads as async, and the only thing that changed is which thread is
+blocked. Every convenience constructor picks the wrong default — `new StreamWriter(path)`,
+`new StreamReader(path)`, `File.Create(path)` — which is why `Buffers/AsyncFiles.cs` exists and why
+nothing else should open a file for itself.
+
+Manifest and palette writes are awaited all the way out to the caller: `RunArtifacts.WriteAllAsync`
+→ `BatchExportViewModel`, and `RampStore` → `RampService` → the palette commands. Neither runs on
+the UI thread any more. Two deliberate exceptions, both on pool threads rather than the dispatcher:
+`SheetWriter.Write` (inside `BatchBaker`'s `Parallel.ForAsync`, where the encode dominates) and
+`SourcePackService` (a three-field settings JSON).
+
+The Sep-specific trap: **a plain `foreach` over a `SepReader` compiles and silently reads
+synchronously.** Only `await foreach` — or `GetAsyncEnumerator(ct)` by hand, which is what
+`RampStore.ReadAsync` uses because `WithCancellation` cannot take a `ref struct` row — is actually
+async. Nothing diagnoses the mistake.
 
 ## C# conventions
 

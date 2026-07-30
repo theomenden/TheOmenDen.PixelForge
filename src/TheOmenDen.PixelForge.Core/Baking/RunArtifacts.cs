@@ -30,6 +30,7 @@ public static class RunArtifacts
     /// <param name="directory">Where the run's sheets were written.</param>
     /// <param name="runId">Stamped into both manifests, from <see cref="BatchManifest.NewRunId"/>.</param>
     /// <param name="recipes">The recipes the run was given, in bake order.</param>
+    /// <param name="cancellationToken">Cancels the writes.</param>
     /// <returns>
     /// One <see cref="ArtifactFailure"/> per manifest that did not land, empty when all did.
     /// </returns>
@@ -45,31 +46,41 @@ public static class RunArtifacts
     /// which nothing would catch, because both files would still look perfectly well-formed.
     /// </para>
     /// </remarks>
-    public static ImmutableArray<ArtifactFailure> WriteAll(
+    public static async Task<ImmutableArray<ArtifactFailure>> WriteAllAsync(
         FullPath directory,
         Guid runId,
-        ImmutableArray<SheetRecipe> recipes)
+        ImmutableArray<SheetRecipe> recipes,
+        CancellationToken cancellationToken = default)
     {
         Guard.IsFalse(recipes.IsDefault);
 
         var failures = ImmutableArray.CreateBuilder<ArtifactFailure>();
 
+        // Written one after another rather than concurrently: four small files, and a run whose
+        // manifests raced would report their failures in a different order each time.
         if (recipes.AsSpan().Any(static recipe => recipe.Geometry is SheetGeometry.Curated))
         {
-            Record(failures, SheetIndex.FileName, SheetIndex.WriteTo(directory));
+            Record(failures, SheetIndex.FileName, await SheetIndex.WriteToAsync(directory, cancellationToken));
         }
 
         if (recipes.AsSpan().Any(static recipe => recipe.Geometry is SheetGeometry.Full))
         {
-            Record(failures, ClipIndex.FileName, ClipIndex.WriteTo(directory));
+            Record(failures, ClipIndex.FileName, await ClipIndex.WriteToAsync(directory, cancellationToken));
         }
 
         Record(
             failures,
             BatchManifest.FileName,
-            BatchManifest.WriteTo(directory, runId, BatchManifest.RowsFor(recipes)));
+            await BatchManifest.WriteToAsync(
+                directory,
+                runId,
+                BatchManifest.RowsFor(recipes),
+                cancellationToken));
 
-        Record(failures, RunManifest.FileName, RunManifest.WriteTo(directory, runId, recipes));
+        Record(
+            failures,
+            RunManifest.FileName,
+            await RunManifest.WriteToAsync(directory, runId, recipes, cancellationToken));
 
         return failures.ToImmutable();
     }
