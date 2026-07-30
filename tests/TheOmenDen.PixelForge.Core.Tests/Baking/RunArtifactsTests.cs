@@ -1,0 +1,145 @@
+using Meziantou.Framework;
+using TheOmenDen.PixelForge.Core.Baking;
+using TheOmenDen.PixelForge.Core.Catalog;
+using TheOmenDen.PixelForge.Core.Spritesheets;
+
+namespace TheOmenDen.PixelForge.Core.Tests.Baking;
+
+/// <summary>
+/// The rule deciding <em>which</em> manifests a run writes, and the run id they share.
+/// </summary>
+/// <remarks>
+/// Every writer beneath this is covered, but the choice between them used to live in a Windows-only
+/// view model that this project cannot reference — so it was the one part of the export with no
+/// tests at all. That is why it moved into <see cref="RunArtifacts"/>.
+/// </remarks>
+public sealed class RunArtifactsTests
+{
+    private static FullPath Partial(AssetSlot slot, string stem) =>
+        FullPath.FromPath(Path.Combine(Path.GetTempPath(), "pack", AssetSlots.FolderName(slot), stem + ".png"));
+
+    private static SheetRecipe Recipe(string name, SheetGeometry geometry) => new()
+    {
+        Name = name,
+        Geometry = geometry,
+        Layers = [new(Partial(AssetSlot.Head, "head1"), IsSkin: true)],
+    };
+
+    private static bool Exists(TemporaryDirectory root, string file) =>
+        File.Exists((root.FullPath / file).Value);
+
+    /// <summary>
+    /// A curated-only run must not leave a <c>clips.csv</c> describing files that are not there.
+    /// </summary>
+    [Fact]
+    public void WriteAll_OmitsTheFullIndex_ForACuratedOnlyRun()
+    {
+        using var root = TemporaryDirectory.Create();
+
+        var failures = RunArtifacts.WriteAll(
+            root.FullPath,
+            BatchManifest.NewRunId(),
+            [Recipe("body-01", SheetGeometry.Curated)]);
+
+        Assert.Empty(failures);
+        Assert.True(Exists(root, SheetIndex.FileName));
+        Assert.False(Exists(root, ClipIndex.FileName));
+    }
+
+    [Fact]
+    public void WriteAll_OmitsTheCuratedIndex_ForAFullOnlyRun()
+    {
+        using var root = TemporaryDirectory.Create();
+
+        var failures = RunArtifacts.WriteAll(
+            root.FullPath,
+            BatchManifest.NewRunId(),
+            [Recipe("raw-01", SheetGeometry.Full)]);
+
+        Assert.Empty(failures);
+        Assert.True(Exists(root, ClipIndex.FileName));
+        Assert.False(Exists(root, SheetIndex.FileName));
+    }
+
+    /// <summary>Both indexes appear when the run produced both geometries.</summary>
+    [Fact]
+    public void WriteAll_WritesEveryArtifact_ForAMixedRun()
+    {
+        using var root = TemporaryDirectory.Create();
+
+        var failures = RunArtifacts.WriteAll(
+            root.FullPath,
+            BatchManifest.NewRunId(),
+            [Recipe("body-01", SheetGeometry.Curated), Recipe("raw-01", SheetGeometry.Full)]);
+
+        Assert.Empty(failures);
+        Assert.True(Exists(root, SheetIndex.FileName));
+        Assert.True(Exists(root, ClipIndex.FileName));
+        Assert.True(Exists(root, BatchManifest.FileName));
+        Assert.True(Exists(root, RunManifest.FileName));
+        Assert.True(Exists(root, RunManifest.SchemaFileName));
+    }
+
+    /// <summary>
+    /// One run, one id. Minting per writer would stamp <c>sheets.csv</c> and <c>manifest.json</c>
+    /// with different ids and nothing would catch it, because both files would still parse.
+    /// </summary>
+    [Fact]
+    public void WriteAll_StampsTheSameRunIdIntoBothManifests()
+    {
+        using var root = TemporaryDirectory.Create();
+
+        var runId = BatchManifest.NewRunId();
+
+        RunArtifacts.WriteAll(root.FullPath, runId, [Recipe("body-01", SheetGeometry.Curated)]);
+
+        var csv = File.ReadAllText((root.FullPath / BatchManifest.FileName).Value);
+        var json = File.ReadAllText((root.FullPath / RunManifest.FileName).Value);
+
+        Assert.Contains(runId.ToString("D"), csv, StringComparison.Ordinal);
+        Assert.Contains(runId.ToString("D"), json, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A missing directory is reported per artifact rather than thrown, so one unwritable manifest
+    /// cannot cost the others — the sheets are already on disk by the time this runs.
+    /// </summary>
+    [Fact]
+    public void WriteAll_ReportsEveryFailure_WhenTheDirectoryIsAbsent()
+    {
+        using var root = TemporaryDirectory.Create();
+
+        var failures = RunArtifacts.WriteAll(
+            root.FullPath / "absent",
+            BatchManifest.NewRunId(),
+            [Recipe("body-01", SheetGeometry.Curated), Recipe("raw-01", SheetGeometry.Full)]);
+
+        // Both indexes plus both manifests.
+        Assert.Equal(4, failures.Length);
+        Assert.All(failures, f => Assert.Equal(BakeFailure.OutputDirectoryUnavailable, f.Failure));
+
+        Assert.Contains(failures, f => string.Equals(f.File, SheetIndex.FileName, StringComparison.Ordinal));
+        Assert.Contains(failures, f => string.Equals(f.File, ClipIndex.FileName, StringComparison.Ordinal));
+        Assert.Contains(failures, f => string.Equals(f.File, BatchManifest.FileName, StringComparison.Ordinal));
+        Assert.Contains(failures, f => string.Equals(f.File, RunManifest.FileName, StringComparison.Ordinal));
+    }
+
+    /// <summary>An empty run still writes the run manifests, just with no sheets in them.</summary>
+    [Fact]
+    public void WriteAll_HandlesARunWithNoRecipes()
+    {
+        using var root = TemporaryDirectory.Create();
+
+        var failures = RunArtifacts.WriteAll(root.FullPath, BatchManifest.NewRunId(), []);
+
+        Assert.False(Exists(root, SheetIndex.FileName));
+        Assert.False(Exists(root, ClipIndex.FileName));
+        Assert.True(Exists(root, BatchManifest.FileName));
+
+        // manifest.json requires at least one layout, which an empty run cannot satisfy — so it is
+        // reported as a schema violation rather than written describing nothing.
+        Assert.Contains(
+            failures,
+            f => string.Equals(f.File, RunManifest.FileName, StringComparison.Ordinal) && f.Failure is BakeFailure.ManifestSchemaViolation);
+    }
+}

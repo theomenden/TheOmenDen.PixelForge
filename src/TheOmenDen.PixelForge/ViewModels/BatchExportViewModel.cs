@@ -9,7 +9,6 @@ using Meziantou.Framework;
 using TheOmenDen.PixelForge.Core.Baking;
 using TheOmenDen.PixelForge.Core.Catalog;
 using TheOmenDen.PixelForge.Core.Palettes;
-using TheOmenDen.PixelForge.Core.Spritesheets;
 using TheOmenDen.PixelForge.Services;
 
 namespace TheOmenDen.PixelForge.ViewModels;
@@ -260,6 +259,18 @@ public sealed partial class BatchExportViewModel : ObservableObject
             Notify($"{recipes.Length} files planned. This will take a while.", StatusLevel.Warning);
         }
 
+        await RunAsync(recipes, cancellationToken);
+    }
+
+    /// <summary>
+    /// Bakes <paramref name="recipes"/>, reports the summary, and writes the manifests beside them.
+    /// </summary>
+    /// <remarks>
+    /// Shared by both export commands so they cannot drift on progress handling, cancellation, or
+    /// which manifests get written — the two differ only in how the recipes were chosen.
+    /// </remarks>
+    private async Task RunAsync(ImmutableArray<SheetRecipe> recipes, CancellationToken cancellationToken)
+    {
         var output = FullPath.FromPath(OutputFolder);
 
         IsExporting = true;
@@ -338,46 +349,17 @@ public sealed partial class BatchExportViewModel : ObservableObject
         summary.Cancelled || summary.Failed is not 0 ? StatusLevel.Warning : StatusLevel.Success);
 
     /// <summary>
-    /// Writes the indexes the run's geometries need, plus both run manifests.
+    /// Writes the run's manifests and surfaces any that did not land.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Each geometry's index is written only when the run actually produced that geometry, so a
-    /// curated-only export does not leave a <c>clips.csv</c> describing files that are not there.
-    /// <see cref="RunManifest"/> applies the same rule to its <c>layouts</c> object.
-    /// </para>
-    /// <para>
-    /// The run id is minted once here and handed to both manifests. Generating it at each call
-    /// site would stamp <c>sheets.csv</c> and <c>manifest.json</c> with different ids for the same
-    /// run — which nothing would catch, because both files would look perfectly well-formed.
-    /// </para>
+    /// Which manifests a run calls for is <see cref="RunArtifacts"/>'s decision, not this page's —
+    /// it is the same rule whoever asks, and it is testable there without a window.
     /// </remarks>
     private void WriteManifests(FullPath output, ImmutableArray<SheetRecipe> recipes)
     {
-        var runId = BatchManifest.NewRunId();
-
-        if (recipes.AsSpan().Any(static recipe => recipe.Geometry is SheetGeometry.Curated))
+        foreach (var failure in RunArtifacts.WriteAll(output, BatchManifest.NewRunId(), recipes))
         {
-            NotifyIfFailed(SheetIndex.FileName, SheetIndex.WriteTo(output));
-        }
-
-        if (recipes.AsSpan().Any(static recipe => recipe.Geometry is SheetGeometry.Full))
-        {
-            NotifyIfFailed(ClipIndex.FileName, ClipIndex.WriteTo(output));
-        }
-
-        NotifyIfFailed(
-            BatchManifest.FileName,
-            BatchManifest.WriteTo(output, runId, BatchManifest.RowsFor(recipes)));
-
-        NotifyIfFailed(RunManifest.FileName, RunManifest.WriteTo(output, runId, recipes));
-    }
-
-    private void NotifyIfFailed(string file, Result<int, BakeFailure> written)
-    {
-        if (!written.IsSuccessful)
-        {
-            Notify($"{file} failed: {written.Error}.", StatusLevel.Error);
+            Notify($"{failure.File} failed: {failure.Failure}.", StatusLevel.Error);
         }
     }
 
