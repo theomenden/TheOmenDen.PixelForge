@@ -20,6 +20,27 @@ $pass = 0; $fail = 0; $results = @()
 $outDir = Join-Path $PSScriptRoot 'ui-results'
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
+# The app window's HWND, resolved once.
+#
+# `-a <pid>` is ambiguous the moment the app owns a second window, and an open tooltip or
+# flyout is a second window — so this is routine, not a fault. When it happens the CLI picks
+# the foreground one and writes an advisory to stderr saying so. Reads merge stderr with
+# `2>&1` to keep a real error visible, which puts that advisory *inside the value*: it
+# carries an HWND, so Get-PlannedCount parsed the window handle as the planned count and a
+# `^`-anchored match on a caption never matched. `-w` takes precedence over `-a` and removes
+# the advisory at its source, which no amount of scrubbing the text afterwards would do
+# reliably — the sentence wraps at the console width, so its tail arrives as its own line.
+#
+# Only reads are switched over. wait-for/invoke/set-value assert on the exit code rather
+# than on captured text, so an extra stderr line costs them nothing.
+$appWindow = ((winapp ui list-windows -a $AppPid --json 2>$null | ConvertFrom-Json) |
+    Where-Object { $_.label -eq 'window' } | Select-Object -First 1).hwnd
+
+if (-not $appWindow) {
+    Write-Error "no app window found for PID $AppPid — is the app running?"
+    exit 1
+}
+
 function Test-UI {
     param([string]$Name, [scriptblock]$Script)
     # Inside $Script use `throw` to fail — `exit` would kill the whole run.
@@ -40,7 +61,7 @@ function Test-UI {
 # straddle a wrap. LASTEXITCODE is reset because the caller asserts on its own condition.
 function Get-Text {
     param([string]$Id)
-    $text = ("$(winapp ui get-value $Id -a $AppPid 2>&1)" -replace '\s+', ' ').Trim()
+    $text = ("$(winapp ui get-value $Id -w $appWindow 2>&1)" -replace '\s+', ' ').Trim()
     $global:LASTEXITCODE = 0
     return $text
 }
@@ -68,7 +89,7 @@ Test-UI 'Window is titled Pixel Forge' {
 
 # Only rendered while the pane is open — a compact pane would clip it to "© 20…".
 Test-UI 'Copyright notice is in the pane footer' {
-    $notice = "$(winapp ui get-value 'CopyrightNotice' -a $AppPid 2>&1)".Trim()
+    $notice = "$(winapp ui get-value 'CopyrightNotice' -w $appWindow 2>&1)".Trim()
     if ($notice -ne '© 2026 - The Omen Den') { throw "unexpected copyright text: '$notice'" }
     $global:LASTEXITCODE = 0
 }
@@ -133,9 +154,9 @@ Test-UI 'A built-in ramp is read-only and says so' {
     if (-not $first) { throw 'ramp list is empty' }
     winapp ui invoke $first -a $AppPid | Out-Null
     Start-Sleep -Milliseconds 700
-    $enabled = winapp ui get-property 'RampName' --property IsEnabled -a $AppPid 2>&1
+    $enabled = winapp ui get-property 'RampName' --property IsEnabled -w $appWindow 2>&1
     if ("$enabled" -notmatch 'IsEnabled:\s*False') { throw "name box should be disabled for a built-in: $enabled" }
-    $bar = winapp ui get-property 'BuiltInRampInfoBar' --property IsOffscreen -a $AppPid 2>&1
+    $bar = winapp ui get-property 'BuiltInRampInfoBar' --property IsOffscreen -w $appWindow 2>&1
     if ("$bar" -notmatch 'IsOffscreen:\s*False') { throw "built-in InfoBar should be visible: $bar" }
     $global:LASTEXITCODE = 0
 }
@@ -157,7 +178,7 @@ Test-UI 'A new ramp is editable and its hex commits on keystroke' {
     Start-Sleep -Milliseconds 700
     winapp ui set-value 'HexStep1' '#102030' -a $AppPid
     Start-Sleep -Milliseconds 500
-    $hex = winapp ui get-value 'HexStep1' -a $AppPid 2>&1
+    $hex = winapp ui get-value 'HexStep1' -w $appWindow 2>&1
     if ("$hex".Trim() -ne '#102030') { throw "hex did not commit: $hex" }
 
     # Ramps persist to LocalState, so without this every run leaves another "New Ramp"
@@ -183,8 +204,8 @@ Test-UI 'Batch export page has its controls' {
 Test-UI 'Export is blocked until an output folder is chosen' {
     winapp ui invoke 'NavPipeline' -a $AppPid
     Start-Sleep -Milliseconds 900
-    $folder = winapp ui get-value 'OutputFolderText' -a $AppPid 2>&1
-    $enabled = winapp ui get-property 'BtnExport' --property IsEnabled -a $AppPid 2>&1
+    $folder = winapp ui get-value 'OutputFolderText' -w $appWindow 2>&1
+    $enabled = winapp ui get-property 'BtnExport' --property IsEnabled -w $appWindow 2>&1
     if ([string]::IsNullOrWhiteSpace("$folder") -and "$enabled" -notmatch 'IsEnabled:\s*False') {
         throw "no output folder but Export is enabled: $enabled"
     }
@@ -256,7 +277,7 @@ Test-UI 'Pipeline: the composite preview is rendered' {
     Start-Sleep -Seconds 2   # past the preview's settle delay and its bake
     winapp ui wait-for 'CompositePreviewImage' -a $AppPid -t 5000 | Out-Null
     if ($LASTEXITCODE -ne 0) { throw 'no composite preview' }
-    $onscreen = winapp ui get-property 'CompositePreviewImage' --property IsOffscreen -a $AppPid 2>&1
+    $onscreen = winapp ui get-property 'CompositePreviewImage' --property IsOffscreen -w $appWindow 2>&1
     if ("$onscreen" -notmatch 'IsOffscreen:\s*False') { throw "composite preview is not on screen: $onscreen" }
     $global:LASTEXITCODE = 0
 }
@@ -270,18 +291,18 @@ Test-UI 'Export mode description and planned count follow the selection' {
     Select-Segment 'itm-curated-\w+'
     $curated = Get-Text 'ExportModeDescription'
     $curatedFiles = Get-PlannedCount
-    if ($curated -notmatch '240x1152 contract sheet') { throw "curated description not shown: $curated" }
+    if ($curated -notmatch '240 by 1152') { throw "curated description not shown: $curated" }
     if ($curatedFiles -lt 1) { throw "nothing is planned, so the modes cannot be told apart: $curatedFiles" }
 
     Select-Segment 'itm-full-\w+'
     $full = Get-Text 'ExportModeDescription'
-    if ($full -notmatch 'raw 1104x192 assembly') { throw "full description not shown: $full" }
+    if ($full -notmatch '1104 by 192') { throw "full description not shown: $full" }
 
     # Both writes every combination in both geometries — exactly twice the files.
     Select-Segment 'itm-both-\w+'
     $both = Get-Text 'ExportModeDescription'
     $bothFiles = Get-PlannedCount
-    if ($both -notmatch 'Both geometries') { throw "both description not shown: $both" }
+    if ($both -notmatch 'Both kinds of sheet') { throw "both description not shown: $both" }
     if ($bothFiles -ne 2 * $curatedFiles) { throw "Both planned $bothFiles, not twice $curatedFiles" }
 
     $global:LASTEXITCODE = 0
@@ -296,7 +317,7 @@ Test-UI 'A mode picked right after navigation survives' {
     Select-Segment 'itm-both-\w+'
     Start-Sleep -Seconds 2
     $description = Get-Text 'ExportModeDescription'
-    if ($description -notmatch '^Both geometries') { throw "mode reverted after navigation: $description" }
+    if ($description -notmatch '^Both kinds of sheet') { throw "mode reverted after navigation: $description" }
     $global:LASTEXITCODE = 0
 }
 

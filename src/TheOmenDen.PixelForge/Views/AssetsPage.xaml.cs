@@ -81,9 +81,9 @@ public sealed partial class AssetsPage : Page
     /// <summary>Pluralised catalogue size, or an invitation when nothing has been scanned.</summary>
     public static string CatalogueLabel(int count) => count switch
     {
-        0 => "No source packs scanned yet.",
-        1 => "1 partial across the three packs.",
-        _ => $"{count} partials across the three packs.",
+        0 => "No art found yet. Set your three pack folders in Settings.",
+        1 => "1 piece of art found across your three packs.",
+        _ => $"{count} pieces of art found across your three packs.",
     };
 
     private void OnLoaded(object sender, RoutedEventArgs e)

@@ -40,7 +40,7 @@
             AutomationProperties.AutomationId="AssetsPacksMissingInfoBar"
             IsClosable="False"
             IsOpen="{x:Bind ViewModel.PacksMissing, Mode=OneWay}"
-            Message="Source pack folders are not configured. Set all three in Settings to browse the library."
+            Message="Your three art pack folders are not set yet. Add them in Settings to browse the art."
             Severity="Warning">
             <InfoBar.ActionButton>
                 <Button
@@ -64,7 +64,8 @@
             Header="Component"
             ItemsSource="{x:Bind ViewModel.Slots, Mode=OneWay}"
             SelectedIndex="0"
-            SelectionChanged="OnComponentSelected">
+            SelectionChanged="OnComponentSelected"
+            ToolTipService.ToolTip="Pick which part of a character to browse, such as hair, top, or hat. The number beside each one is how many files it has.">
             <ComboBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:SlotOption">
                     <Grid ColumnSpacing="12" Padding="0,4">
@@ -116,7 +117,8 @@
                 AutomationProperties.Name="Asset thumbnails"
                 ItemsSource="{x:Bind Gallery.Tiles, Mode=OneWay}"
                 SelectionChanged="OnTileSelected"
-                SelectionMode="Single">
+                SelectionMode="Single"
+                ToolTipService.ToolTip="Click any thumbnail to load it into the animation preview on the right. Hover a name to see its file name.">
                 <GridView.ItemTemplate>
                     <DataTemplate x:DataType="local:AssetTile">
                         <!--
@@ -212,7 +214,8 @@
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="{x:Bind local:AssetsPage.ClipSummary(ViewModel.SelectedClip), Mode=OneWay}"
-                    TextWrapping="Wrap" />
+                    TextWrapping="Wrap"
+                    ToolTipService.ToolTip="How many frames the animation plays, how long each frame is held, and how long one full loop takes." />
 
                 <ComboBox
                     MinWidth="240"
@@ -220,7 +223,8 @@
                     AutomationProperties.Name="Animation clip"
                     Header="Clip"
                     ItemsSource="{x:Bind ViewModel.Clips, Mode=OneWay}"
-                    SelectedItem="{x:Bind ViewModel.SelectedClip, Mode=TwoWay}">
+                    SelectedItem="{x:Bind ViewModel.SelectedClip, Mode=TwoWay}"
+                    ToolTipService.ToolTip="Pick which animation to play, such as walk or attack. A play arrow means it moves. A pause icon means it is a single pose that other animations borrow frames from.">
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="sheets:GeneratorClip">
                             <Grid Padding="0,4" ColumnSpacing="12">
@@ -256,7 +260,8 @@
                     AutomationProperties.Name="Facing"
                     Header="Facing"
                     ItemsSource="{x:Bind ViewModel.FacingOptions, Mode=OneWay}"
-                    SelectedIndex="{x:Bind ViewModel.SelectedFacing, Mode=TwoWay}">
+                    SelectedIndex="{x:Bind ViewModel.SelectedFacing, Mode=TwoWay}"
+                    ToolTipService.ToolTip="Which way the character faces in the preview. North faces away from you. It previews fine here, but the game-ready sheet leaves it out.">
                     <ComboBox.ItemTemplate>
                         <DataTemplate x:DataType="vm:FacingOption">
                             <Grid Padding="0,4" ColumnSpacing="12">
@@ -305,7 +310,8 @@
                     Header="Composite"
                     IsOn="{x:Bind ViewModel.ShowOverBody, Mode=TwoWay}"
                     OffContent="Partial alone"
-                    OnContent="Over base body" />
+                    OnContent="Over base body"
+                    ToolTipService.ToolTip="On draws the piece over a plain body, which is the only way to judge a hat or a weapon. Off shows the piece by itself, which is better for checking that it lines up." />
 
                 <ToggleSwitch
                     AutomationProperties.AutomationId="AnimationPlayToggle"
@@ -313,7 +319,8 @@
                     Header="Playback"
                     IsOn="{x:Bind ViewModel.IsPlaying, Mode=TwoWay}"
                     OffContent="Paused"
-                    OnContent="Playing" />
+                    OnContent="Playing"
+                    ToolTipService.ToolTip="Starts and stops the preview. Pause it to study one frame." />
             </StackPanel>
         </Grid>
     </Grid>

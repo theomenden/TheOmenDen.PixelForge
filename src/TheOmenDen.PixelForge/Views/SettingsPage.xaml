@@ -14,7 +14,7 @@
                 <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Settings" />
                 <TextBlock
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Text="Appearance and source asset locations." />
+                    Text="Choose how the app looks, and tell it where your art packs live." />
             </StackPanel>
 
             <TextBlock
@@ -32,9 +32,9 @@
                     AutomationProperties.Name="App theme"
                     SelectedIndex="{x:Bind ViewModel.SelectedThemeIndex, Mode=TwoWay}"
                     SelectionMode="Single">
-                    <controls:SegmentedItem Content="System" />
-                    <controls:SegmentedItem Content="Light" />
-                    <controls:SegmentedItem Content="Dark" />
+                    <controls:SegmentedItem Content="System" ToolTipService.ToolTip="Follows whatever light or dark setting Windows is using." />
+                    <controls:SegmentedItem Content="Light" ToolTipService.ToolTip="Always use the light look, whatever Windows is set to." />
+                    <controls:SegmentedItem Content="Dark" ToolTipService.ToolTip="Always use the dark look, whatever Windows is set to." />
                 </controls:Segmented>
             </controls:SettingsCard>
 
@@ -49,7 +49,7 @@
                 AutomationProperties.AutomationId="PacksHintBar"
                 IsClosable="False"
                 IsOpen="True"
-                Message="Time Elements packs are licensed art and are not shipped with PixelForge. Point each row at that pack's assets folder."
+                Message="The Time Elements art packs are not included with Pixel Forge, because the license does not let us pass them on. Get the three packs yourself, then point each row below at that pack's assets folder. The Assets and Pipeline pages stay empty until all three are set, and so does the preview on the Palette page."
                 Severity="Informational" />
 
             <controls:SettingsCard
@@ -63,7 +63,8 @@
                     AutomationProperties.AutomationId="BtnBrowseCorePack"
                     AutomationProperties.Name="Browse for core pack folder"
                     Command="{x:Bind ViewModel.BrowseCorePackCommand}"
-                    Content="Browse" />
+                    Content="Browse"
+                    ToolTipService.ToolTip="Pick the assets folder inside the main Time Elements pack. It should hold folders named head, top, bottom, hair, and so on. The path is saved right away." />
             </controls:SettingsCard>
 
             <controls:SettingsCard
@@ -77,7 +78,8 @@
                     AutomationProperties.AutomationId="BtnBrowseExpansion1Pack"
                     AutomationProperties.Name="Browse for expansion 1 folder"
                     Command="{x:Bind ViewModel.BrowseExpansion1PackCommand}"
-                    Content="Browse" />
+                    Content="Browse"
+                    ToolTipService.ToolTip="Pick the assets folder inside Character Expansion 1. It is a separate download from the main pack and has its own extra hair and clothes." />
             </controls:SettingsCard>
 
             <controls:SettingsCard
@@ -91,7 +93,8 @@
                     AutomationProperties.AutomationId="BtnBrowseExpansion2Pack"
                     AutomationProperties.Name="Browse for expansion 2 folder"
                     Command="{x:Bind ViewModel.BrowseExpansion2PackCommand}"
-                    Content="Browse" />
+                    Content="Browse"
+                    ToolTipService.ToolTip="Pick the assets folder inside Character Expansion 2. This one has no front extra folder, so that section will not appear on the Pipeline page." />
             </controls:SettingsCard>
         </StackPanel>
     </ScrollViewer>

@@ -32,14 +32,16 @@ public sealed partial class BatchExportViewModel : ObservableObject
 
     private const ExportMode DefaultMode = ExportMode.Curated;
 
+    // User-facing copy, so it says what the choice costs in plain words. The pixel sizes stay:
+    // they are the one detail a person checks a sheet against.
     private const string CuratedDescription =
-        "The 240x1152 contract sheet: eight clips on three facings, north dropped. This is the geometry Corvus consumes.";
+        "The game-ready sheet, 240 by 1152 pixels. Eight animations, each one facing left, right, and toward you. The away-facing view is left out because the game never shows it.";
 
     private const string FullDescription =
-        "The raw 1104x192 assembly: every source column on all four facings, keeping the north facing and the draws the contract sheet drops.";
+        "The raw sheet, 1104 by 192 pixels. Every frame the source art has, on all four directions, including the away-facing view and the extra poses the game-ready sheet drops.";
 
     private const string BothDescription =
-        "Both geometries, one file each per combination — twice the files, with index.csv and clips.csv beside them.";
+        "Both kinds of sheet, one file each per combination, so twice as many files. You also get index.csv and clips.csv beside them.";
 
     private readonly SourcePackService _packs;
     private readonly CatalogService _catalog;

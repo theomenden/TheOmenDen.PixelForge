@@ -24,9 +24,16 @@
 
         <StackPanel Spacing="4">
             <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Batch export" />
+            <!--
+                One line, deliberately. This row is Auto and the picker below it is the `*` row, so
+                a subtitle that wraps to two lines takes ~20 DIPs straight off the ScrollViewer —
+                which is enough for the ItemsRepeater to realize one slot fewer, and the tenth
+                expander then has no automation id for ui-tests.ps1 to find. Longer copy goes in
+                the caption beside the preview, whose row is pinned by the 144-DIP still.
+            -->
             <TextBlock
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Text="Bake the selected sheets to lossless WebP, verified by round-trip." />
+                Text="Tick the parts you want, then export one sheet per combination." />
         </StackPanel>
 
         <InfoBar
@@ -34,7 +41,7 @@
             AutomationProperties.AutomationId="PacksMissingInfoBar"
             IsClosable="False"
             IsOpen="{x:Bind ViewModel.PacksMissing, Mode=OneWay}"
-            Message="Source pack folders are not configured. Set all three in Settings before exporting."
+            Message="Your three art pack folders are not set yet. Add them in Settings before you export."
             Severity="Warning">
             <InfoBar.ActionButton>
                 <Button
@@ -61,7 +68,8 @@
                 Header="Output folder"
                 IsReadOnly="True"
                 PlaceholderText="Choose a folder"
-                Text="{x:Bind ViewModel.OutputFolder, Mode=OneWay}" />
+                Text="{x:Bind ViewModel.OutputFolder, Mode=OneWay}"
+                ToolTipService.ToolTip="Where the sheets and their list files get written. Use Browse to set it. Files with the same name are overwritten." />
 
             <Button
                 Grid.Column="1"
@@ -69,7 +77,8 @@
                 AutomationProperties.AutomationId="BtnBrowseOutput"
                 AutomationProperties.Name="Browse for output folder"
                 Command="{x:Bind ViewModel.BrowseOutputCommand}"
-                Content="Browse" />
+                Content="Browse"
+                ToolTipService.ToolTip="Pick the folder to save into. An empty folder is the safest choice." />
 
             <StackPanel
                 Grid.Row="1"
@@ -96,9 +105,18 @@
                     AutomationProperties.Name="Export mode"
                     SelectionChanged="OnExportModeChanged"
                     SelectionMode="Single">
-                    <controls:SegmentedItem Content="Curated" Icon="{ui:FontIcon Glyph=&#xE81E;}" />
-                    <controls:SegmentedItem Content="Full" Icon="{ui:FontIcon Glyph=&#xE7C4;}" />
-                    <controls:SegmentedItem Content="Both" Icon="{ui:FontIcon Glyph=&#xE8C6;}" />
+                    <controls:SegmentedItem
+                        Content="Curated"
+                        Icon="{ui:FontIcon Glyph=&#xE81E;}"
+                        ToolTipService.ToolTip="The trimmed, game-ready sheet. Pick this if you are not sure." />
+                    <controls:SegmentedItem
+                        Content="Full"
+                        Icon="{ui:FontIcon Glyph=&#xE7C4;}"
+                        ToolTipService.ToolTip="The untrimmed sheet with every frame and every direction the source art has." />
+                    <controls:SegmentedItem
+                        Content="Both"
+                        Icon="{ui:FontIcon Glyph=&#xE8C6;}"
+                        ToolTipService.ToolTip="Writes both kinds of sheet, which doubles the file count." />
                 </controls:Segmented>
                 <TextBlock
                     AutomationProperties.AutomationId="ExportModeDescription"
@@ -130,12 +148,35 @@
                 WinUI's Image has no interpolation-mode switch — letting it scale would blur the
                 pixel art it exists to show.
             -->
-            <Image
-                x:Name="CompositePreviewImage"
-                HorizontalAlignment="Left"
-                AutomationProperties.AutomationId="CompositePreviewImage"
-                AutomationProperties.Name="Composite preview"
-                Stretch="None" />
+            <!--
+                A Grid, not a horizontal StackPanel: the still is a fixed 432x144 (CompositePreview
+                sets it from PreviewScale), and at the default 1360-DIP window this column is only
+                ~716 wide. A StackPanel measures its children at infinite width, so the caption
+                would silently clip at the column edge instead of wrapping. A * column wraps at
+                whatever is left over, at any window size.
+            -->
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Image
+                    x:Name="CompositePreviewImage"
+                    HorizontalAlignment="Left"
+                    AutomationProperties.AutomationId="CompositePreviewImage"
+                    AutomationProperties.Name="Composite preview"
+                    Stretch="None"
+                    ToolTipService.ToolTip="One example of your picks stacked together. It is a sample, not every file the run will write." />
+                <TextBlock
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    AutomationProperties.AutomationId="SelectionHint"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="Open a section below and tick the files you want. Every ticked file is combined with every ticked file in the other sections, so the file count climbs fast. A section left empty is skipped, except for bottom, top, and head, which a character always needs."
+                    TextWrapping="Wrap" />
+            </Grid>
 
             <!--
                 ItemsRepeater is a layout primitive: it has no scrolling of its own, so without
@@ -180,13 +221,15 @@
                                         AutomationProperties.AutomationId="{x:Bind local:PipelinePage.SlotAutomationId('SlotFilter', Slot)}"
                                         AutomationProperties.Name="{x:Bind local:PipelinePage.SlotLabel('Filter', Header)}"
                                         PlaceholderText="Filter"
-                                        Text="{x:Bind Filter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        Text="{x:Bind Filter, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        ToolTipService.ToolTip="Type part of a name to shorten this list, such as hair1. Clear the box to see everything again. Filtering hides rows but does not untick them." />
                                     <ToggleSwitch
                                         AutomationProperties.AutomationId="{x:Bind local:PipelinePage.SlotAutomationId('SlotVariants', Slot)}"
                                         AutomationProperties.Name="{x:Bind local:PipelinePage.SlotLabel('Include colour variants for', Header)}"
                                         IsOn="{x:Bind IncludeVariants, Mode=TwoWay}"
                                         OffContent="Base only"
-                                        OnContent="All colours" />
+                                        OnContent="All colours"
+                                        ToolTipService.ToolTip="Base only uses just the file you ticked. All colours also brings in every ready-made recolor of it, which can turn one tick into several files." />
                                 </StackPanel>
                                 <controls:SettingsExpander.ItemTemplate>
                                     <DataTemplate x:DataType="vm:PartialSelectionItem">
@@ -214,7 +257,7 @@
                     <TextBlock
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                         Style="{StaticResource CaptionTextBlockStyle}"
-                        Text="Only combinations carrying skin are multiplied by this axis."
+                        Text="Tick more than one tone and you get a separate sheet per tone. This only affects parts that show skin, so hair and clothes keep the colors they were drawn in."
                         TextWrapping="Wrap" />
                     <!--
                         UniformGrid is a panel, not an items control, so it arrives as the
@@ -301,12 +344,14 @@
                     AutomationProperties.AutomationId="PlannedCountText"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="{x:Bind local:PipelinePage.PlannedLabel(ViewModel.PlannedCount), Mode=OneWay}" />
+                    Text="{x:Bind local:PipelinePage.PlannedLabel(ViewModel.PlannedCount), Mode=OneWay}"
+                    ToolTipService.ToolTip="How many files your current ticks and mode would write. Export stays off while this reads 0 files." />
                 <Button
                     AutomationProperties.AutomationId="BtnLoadRoostSelection"
                     AutomationProperties.Name="Load the spec-079 selection"
                     Command="{x:Bind ViewModel.LoadRoostSelectionCommand}"
-                    Content="Roost set (079)" />
+                    Content="Roost set (079)"
+                    ToolTipService.ToolTip="Ticks the exact art the Roost avatar set is built from, and turns on every skin tone. Use it as a starting point you can change." />
                 <!--
                     Bakes the named deliverable rather than the picker's cross product, so it
                     ignores both the selection and the mode toggle. Its own button because the
@@ -317,17 +362,19 @@
                     AutomationProperties.Name="Export the spec-079 deliverable"
                     Command="{x:Bind ViewModel.ExportRoostSetCommand}"
                     Content="Export 079 set"
-                    ToolTipService.ToolTip="Bake body-01..07 and hair-01..09 as Corvus names them, curated geometry, ignoring the picker." />
+                    ToolTipService.ToolTip="Writes the 16 finished Roost sheets, 7 bodies and 9 hairstyles, under the names the game looks for. It ignores your ticks and the mode above on purpose." />
                 <Button
                     AutomationProperties.AutomationId="BtnExport"
                     Command="{x:Bind ViewModel.ExportCommand}"
                     Content="Export"
-                    Style="{StaticResource AccentButtonStyle}" />
+                    Style="{StaticResource AccentButtonStyle}"
+                    ToolTipService.ToolTip="Writes one sheet for every combination your ticks add up to. Check the file count on the left first." />
                 <Button
                     AutomationProperties.AutomationId="BtnCancelExport"
                     Command="{x:Bind ViewModel.ExportCancelCommand}"
                     Content="Cancel"
-                    IsEnabled="{x:Bind ViewModel.IsExporting, Mode=OneWay}" />
+                    IsEnabled="{x:Bind ViewModel.IsExporting, Mode=OneWay}"
+                    ToolTipService.ToolTip="Stops the run. Sheets already written stay where they are, and the list files are still saved for them." />
             </StackPanel>
 
             <!--

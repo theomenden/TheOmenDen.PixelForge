@@ -58,7 +58,7 @@
                     AutomationProperties.Name="Pencil tool"
                     HorizontalAlignment="Stretch"
                     HorizontalContentAlignment="Left"
-                    ToolTipService.ToolTip="Pencil">
+                    ToolTipService.ToolTip="Pencil. Paints one pixel at a time in the color you picked.">
                     <StackPanel Orientation="Horizontal" Spacing="12">
                         <FontIcon FontSize="16" Glyph="&#xE70F;" />
                         <TextBlock Text="Pencil" Visibility="{x:Bind ToolLabels.Visibility, Mode=OneWay}" />
@@ -70,7 +70,7 @@
                     AutomationProperties.Name="Fill tool"
                     HorizontalAlignment="Stretch"
                     HorizontalContentAlignment="Left"
-                    ToolTipService.ToolTip="Fill">
+                    ToolTipService.ToolTip="Fill. Floods the area you click with the color you picked.">
                     <StackPanel Orientation="Horizontal" Spacing="12">
                         <FontIcon FontSize="16" Glyph="&#xE7B3;" />
                         <TextBlock Text="Fill" Visibility="{x:Bind ToolLabels.Visibility, Mode=OneWay}" />
@@ -82,12 +82,13 @@
                     AutomationProperties.Name="Eraser tool"
                     HorizontalAlignment="Stretch"
                     HorizontalContentAlignment="Left"
-                    ToolTipService.ToolTip="Eraser">
+                    ToolTipService.ToolTip="Eraser. Clears pixels back to see-through.">
                     <StackPanel Orientation="Horizontal" Spacing="12">
                         <FontIcon FontSize="16" Glyph="&#xE75C;" />
                         <TextBlock Text="Eraser" Visibility="{x:Bind ToolLabels.Visibility, Mode=OneWay}" />
                     </StackPanel>
                 </Button>
+
             </StackPanel>
         </Border>
 
@@ -96,17 +97,35 @@
             <Border
                 Width="320"
                 Height="320"
+                Padding="16"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Background="{ThemeResource CanvasCheckerLightBrush}"
                 BorderBrush="{ThemeResource ToolPanelBorderBrush}"
                 BorderThickness="1">
-                <TextBlock
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                    Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="Sprite surface" />
+                <!--
+                    The tools are shape only: nothing is wired to any of them yet, and saying so is
+                    cheaper than a new user clicking each one to find out.
+
+                    On the surface rather than in the tool panel, which was the first attempt: the
+                    panel collapses to a 56px icon strip below 900 effective DIPs, and on a 150%
+                    display the default 1360-DIP window is already past that threshold — so a
+                    notice hidden with the labels is hidden in the state most people open the app in.
+                -->
+                <StackPanel VerticalAlignment="Center" Spacing="8">
+                    <TextBlock
+                        HorizontalAlignment="Center"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Text="Sprite surface" />
+                    <TextBlock
+                        AutomationProperties.AutomationId="CanvasNotice"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Drawing is not switched on yet. For now, use Assets to look at the art, Palette to build skin colors, and Pipeline to bake sheets."
+                        TextAlignment="Center"
+                        TextWrapping="Wrap" />
+                </StackPanel>
             </Border>
         </Grid>
     </Grid>

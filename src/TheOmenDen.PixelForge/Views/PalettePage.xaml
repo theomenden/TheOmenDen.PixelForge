@@ -37,7 +37,8 @@
             <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Palette" />
             <TextBlock
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Text="Skin ramps. Five steps, darkest first — a recolour is a straight index-for-index substitution." />
+                Text="Skin colors come in sets of five shades, darkest first. Recoloring swaps each shade for the matching one in the set you choose."
+                TextWrapping="Wrap" />
         </StackPanel>
 
         <!--  Ramp list  -->
@@ -53,7 +54,8 @@
                 AutomationProperties.Name="Skin ramps"
                 ContainerContentChanging="OnRampContainerChanging"
                 ItemsSource="{x:Bind ViewModel.RampView, Mode=OneWay}"
-                SelectedItem="{x:Bind ViewModel.SelectedRamp, Mode=TwoWay}">
+                SelectedItem="{x:Bind ViewModel.SelectedRamp, Mode=TwoWay}"
+                ToolTipService.ToolTip="Every color set you can use, sorted by name. Pick one to open it in the editor on the right.">
                 <ListView.ItemTemplate>
                     <DataTemplate x:DataType="palettes:SkinRamp">
                         <StackPanel Padding="0,8" Spacing="6">
@@ -105,26 +107,31 @@
                     AutomationProperties.AutomationId="BtnNewRamp"
                     Command="{x:Bind ViewModel.NewRampCommand}"
                     Icon="Add"
-                    Label="New" />
+                    Label="New"
+                    ToolTipService.ToolTip="Adds a color set you can edit. It starts as a copy of the default skin tones." />
                 <AppBarButton
                     AutomationProperties.AutomationId="BtnDuplicateRamp"
                     Command="{x:Bind ViewModel.DuplicateRampCommand}"
                     Icon="Copy"
-                    Label="Duplicate" />
+                    Label="Duplicate"
+                    ToolTipService.ToolTip="Copies the selected set into an editable one. This is how you change a set that came with the app." />
                 <AppBarButton
                     AutomationProperties.AutomationId="BtnDeleteRamp"
                     Command="{x:Bind ViewModel.DeleteRampCommand}"
                     Icon="Delete"
-                    Label="Delete" />
+                    Label="Delete"
+                    ToolTipService.ToolTip="Removes the selected set. The seven sets that came with the app cannot be removed." />
                 <CommandBar.SecondaryCommands>
                     <AppBarButton
                         AutomationProperties.AutomationId="BtnImportRamps"
                         Command="{x:Bind ViewModel.ImportCommand}"
-                        Label="Import CSV" />
+                        Label="Import CSV"
+                        ToolTipService.ToolTip="Reads color sets out of a .csv file and adds them to your list." />
                     <AppBarButton
                         AutomationProperties.AutomationId="BtnExportRamps"
                         Command="{x:Bind ViewModel.ExportCommand}"
-                        Label="Export CSV" />
+                        Label="Export CSV"
+                        ToolTipService.ToolTip="Writes your color sets to a .csv file you can back up or send to someone else." />
                 </CommandBar.SecondaryCommands>
             </CommandBar>
         </Grid>
@@ -155,7 +162,7 @@
                     AutomationProperties.AutomationId="BuiltInRampInfoBar"
                     IsClosable="False"
                     IsOpen="{x:Bind ViewModel.IsBuiltInSelected, Mode=OneWay}"
-                    Message="This is a shipped ramp and cannot be edited. Duplicate it to make changes."
+                    Message="This color set came with the app, so it cannot be changed. Click Duplicate to get a copy you can edit."
                     Severity="Informational" />
 
                 <!--
@@ -176,11 +183,17 @@
                         AutomationProperties.AutomationId="RampName"
                         AutomationProperties.Name="Ramp name"
                         IsEnabled="{x:Bind ViewModel.IsEditable, Mode=OneWay}"
-                        Text="{x:Bind ViewModel.EditedName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                        Text="{x:Bind ViewModel.EditedName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                        ToolTipService.ToolTip="What this set is called in the list here and in the skin tone list on the Pipeline page. Two sets cannot share a name." />
                 </StackPanel>
 
                 <StackPanel Spacing="8">
                     <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Steps" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="Five shades, darkest at the top and lightest at the bottom. Keep them in that order or the recolored art will look wrong."
+                        TextWrapping="Wrap" />
                     <ItemsControl IsEnabled="{x:Bind ViewModel.IsEditable, Mode=OneWay}" ItemsSource="{x:Bind ViewModel.Steps, Mode=OneWay}">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate x:DataType="vm:RampStepViewModel">
@@ -206,7 +219,8 @@
                                         Grid.Column="1"
                                         AutomationProperties.AutomationId="{x:Bind SwatchAutomationId}"
                                         AutomationProperties.Name="{x:Bind Label}"
-                                        SelectedColor="{x:Bind PickerColor, Mode=TwoWay}">
+                                        SelectedColor="{x:Bind PickerColor, Mode=TwoWay}"
+                                        ToolTipService.ToolTip="Click to choose this shade. The preview below follows along right away, before you save.">
                                         <controls:ColorPickerButton.ColorPickerStyle>
                                             <Style TargetType="controls:ColorPicker">
                                                 <Setter Property="IsAlphaEnabled" Value="False" />
@@ -219,7 +233,8 @@
                                         Grid.Column="2"
                                         AutomationProperties.AutomationId="{x:Bind HexAutomationId}"
                                         AutomationProperties.Name="{x:Bind HexFieldName}"
-                                        Text="{x:Bind Hex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}">
+                                        Text="{x:Bind Hex, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        ToolTipService.ToolTip="The same shade written as a hex code, like #DBA463. Type over it to set an exact color.">
                                         <interactivity:Interaction.Behaviors>
                                             <!--  Retyping a hex should not need a manual select-all first.  -->
                                             <behaviors:AutoSelectBehavior />
@@ -234,11 +249,17 @@
                         AutomationProperties.AutomationId="BtnSaveRamps"
                         Command="{x:Bind ViewModel.SaveRampCommand}"
                         Content="Save ramp"
-                        Style="{StaticResource AccentButtonStyle}" />
+                        Style="{StaticResource AccentButtonStyle}"
+                        ToolTipService.ToolTip="Saves the name and all five shades. Your edits are not kept until you click this." />
                 </StackPanel>
 
                 <StackPanel Spacing="8">
                     <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Preview" />
+                    <TextBlock
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                        Style="{StaticResource CaptionTextBlockStyle}"
+                        Text="A sample character recolored with the shades above, so you can see the set before you save it."
+                        TextWrapping="Wrap" />
                     <Border
                         Padding="16"
                         Background="{ThemeResource CanvasBackdropBrush}"
@@ -258,7 +279,7 @@
                                 VerticalAlignment="Center"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                                 Style="{StaticResource CaptionTextBlockStyle}"
-                                Text="Set the source pack folders in Settings to see a live preview." />
+                                Text="Set your three pack folders in Settings to see a live preview here." />
                         </Grid>
                     </Border>
                 </StackPanel>
