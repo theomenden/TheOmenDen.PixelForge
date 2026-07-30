@@ -71,7 +71,21 @@ five-entry table.
     column 1 the stand pose.
 14. Bearing-invariant test: every diagonal is its row's cardinal minus 45 degrees of compass bearing.
 15. Time Fantasy pack root, **optional** — see Risks.
-16. Recipes for Time Fantasy sheets: one layer, no tone axis, no curate.
+16. ~~Recipes for Time Fantasy sheets~~ — **superseded**. The goal is eight-way motion for the
+    *Time Elements* characters; the Time Fantasy sheet is the reference for what that looks like,
+    not art to ship in its place. Delivered instead:
+    - `SourcePack` on the recipe, naming the palette a recolour reads **from**. `AssembleLayers`
+      had `SkinRamps.Source` hard-coded, so a Time Fantasy recipe would have matched nothing and
+      returned the sheet in its authored palette silently — the same failure class as the
+      `OrphanScan` bug, one layer deeper.
+    - `FacingResolution`, answering any of the eight compass points from whatever facings a pack
+      has. Time Elements ships no diagonals in any pack and they cannot be synthesised, so eight-way
+      movement is served by resolving each heading to the nearest available facing and publishing
+      the table. See the spec's "Eight-way movement for Time Elements".
+
+    A curated Time Fantasy *selection* is deliberately not built. `RoostSheets` exists because spec
+    079 names exactly what ships; there is no equivalent here, and picking from the pack's 21 sheets
+    would be inventing product decisions.
 
 ## Phase 5 — `manifest.json` 1.2.0
 

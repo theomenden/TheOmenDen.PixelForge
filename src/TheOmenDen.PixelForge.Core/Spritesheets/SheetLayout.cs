@@ -57,4 +57,31 @@ public static class SheetLayout
     ];
 
     public static int RowFor(int clipIndex, int facing) => clipIndex * FacingCount + facing;
+
+    /// <summary>
+    /// Compass bearing of each source facing row, in row order — south, west, east, north.
+    /// </summary>
+    /// <remarks>
+    /// Four, and no diagonals: none exist in the core pack, either expansion, or the <c>tdsm</c>
+    /// variant, and a three-quarter pose cannot be derived from these. Stating the bearings is what
+    /// lets <see cref="FacingResolution"/> answer an eight-way heading from four-way art.
+    /// </remarks>
+    public static ImmutableArray<int> SourceBearings { get; } = [180, 270, 90, 0];
+
+    /// <summary>
+    /// Bearings the curated geometry can serve. North is dropped, so it cannot serve 0.
+    /// </summary>
+    /// <remarks>
+    /// Sliced from <see cref="SourceBearings"/> rather than restated: north is the last source row
+    /// and <see cref="FacingCount"/> is exactly the count that survives, so the two cannot drift.
+    /// </remarks>
+    public static ImmutableArray<int> CuratedBearings { get; } = [.. SourceBearings.AsSpan()[..FacingCount]];
+
+    /// <summary>
+    /// The source facing row to play for a heading, including headings the art has no frames for.
+    /// </summary>
+    /// <param name="bearing">A compass heading in degrees, north 0 and east 90.</param>
+    /// <returns>A row index into the source geometry, 0 to <see cref="SourceRows"/> - 1.</returns>
+    public static int RowForBearing(int bearing) =>
+        SourceBearings.IndexOf(FacingResolution.Resolve(bearing, SourceBearings.AsSpan()));
 }

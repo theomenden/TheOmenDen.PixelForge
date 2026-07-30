@@ -181,6 +181,46 @@ slip breaks the rule and fails the test rather than shipping a character that st
 Columns 3-5 are separately drawn poses, not mirrors — mirror-pairing scored 50-58 mismatched pixels
 where a true pair scores 0.
 
+#### Eight-way movement for Time Elements
+
+The goal is 8-directional motion for the **Time Elements** characters. Time Fantasy's diagonal
+sheet is the reference for what that looks like, not art to be shipped in its place.
+
+**Time Elements has no diagonal frames.** Verified across the core pack, both character expansions
+and the `tdsm` variant: every partial is 23 columns x 4 rows, south/west/east/north. They cannot be
+synthesised either — a three-quarter pose is different art, not a transform of the front and side
+views, and shearing 48px pixel art produces mush. Time Fantasy's sheet cannot lend them: a
+different character, at 26x36, with different proportions.
+
+**Decision: resolve headings to the nearest available facing, and publish the table.** No new art.
+`FacingResolution.Resolve` answers any of the eight compass points from whatever facings a pack
+actually has, so Time Fantasy resolves 8 to 8 and Time Elements resolves 8 to 4. Publishing it in
+the manifest is what stops Unity and MonoGame each inventing an answer for a 315-degree heading.
+
+Every exact diagonal is equidistant from two cardinals, so the tie-break *is* the decision. It goes
+to the more horizontal candidate — in top-down pixel art a side view reads as movement where a
+front or back view reads as standing still, so a character moving north-east looks better walking
+east. A remaining tie (north against a set holding only east and west, which is the curated
+geometry, since it drops north) breaks to the lower bearing: arbitrary, but deterministic, which is
+the property that matters when two engines read one table.
+
+| Heading | Elements row | Time Fantasy row |
+|---|---|---|
+| 0 north | north | north |
+| 45 NE | east | north_east |
+| 90 east | east | east |
+| 135 SE | east | south_east |
+| 180 south | south | south |
+| 225 SW | west | south_west |
+| 270 west | west | west |
+| 315 NW | west | north_west |
+
+**Recorded for whenever diagonals are authored:** east is `mirror(west)` for 20-21 of 23 columns in
+every partial measured, the remainder being asymmetric poses. The artist built east by mirroring
+west and fixing a few frames by hand — so authoring only south-east and north-east would yield the
+other two by the pack's own convention, halving that art burden. Out of scope here; it is recorded
+so the option is not rediscovered from scratch.
+
 #### Walk cadence
 
 The 3-frame walk is **ping-pong, `0 -> 1 -> 2 -> 1`**, with column 1 the stand pose. Confirmed by the
