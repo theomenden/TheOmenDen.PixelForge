@@ -62,6 +62,52 @@ internal static class ExportPlan
         return new(both);
     }
 
+    /// <summary>
+    /// The paper-doll layer set a selection, tone axis and mode imply.
+    /// </summary>
+    /// <param name="selections">What every slot contributes.</param>
+    /// <param name="tones">The ticked tones, multiplying bodies only.</param>
+    /// <param name="mode">Which geometry to write, or both.</param>
+    /// <param name="labels">The directory name for each body, from <see cref="HeroRegistry.Labels"/>.</param>
+    /// <returns>The recipes, or the <see cref="PlanFailure"/> that stopped them.</returns>
+    /// <remarks>
+    /// The export path. <see cref="Recipes"/> stays for <see cref="Still"/>, which needs a dressed
+    /// composite for the canvas — the preview composites, the export layers.
+    /// </remarks>
+    public static Result<ImmutableArray<SheetRecipe>, PlanFailure> Layers(
+        ImmutableArray<SlotSelection> selections,
+        ImmutableArray<SkinRamp> tones,
+        ExportMode mode,
+        IReadOnlyDictionary<HeroKey, string> labels)
+    {
+        if (mode is not ExportMode.Both)
+        {
+            return LayerPlan.Expand(
+                selections,
+                tones,
+                mode is ExportMode.Full ? SheetGeometry.Full : SheetGeometry.Curated,
+                labels);
+        }
+
+        var curated = LayerPlan.Expand(selections, tones, SheetGeometry.Curated, labels);
+
+        if (!curated.TryGet(out var first))
+        {
+            return new(curated.Error);
+        }
+
+        var full = LayerPlan.Expand(selections, tones, SheetGeometry.Full, labels);
+
+        if (!full.TryGet(out var second))
+        {
+            return new(full.Error);
+        }
+
+        ImmutableArray<SheetRecipe> both = [.. first, .. second];
+
+        return new(both);
+    }
+
     /// <summary>What a rejected plan tells the user.</summary>
     /// <param name="failure">Why <see cref="Recipes"/> produced nothing.</param>
     /// <returns>The sentence the page shows as a notice.</returns>
@@ -69,6 +115,9 @@ internal static class ExportPlan
     {
         PlanFailure.RequiredSlotEmpty =>
             "Bottom, top and head go together. Fill all three, or leave all three empty for an overlay-only sheet.",
+        PlanFailure.HeroRegistryUnreadable =>
+            "heroes.json in the output folder could not be read. Move or repair it before exporting — "
+            + "renumbering over it would make existing hero folders mean different characters.",
         _ => "Nothing selected.",
     };
 

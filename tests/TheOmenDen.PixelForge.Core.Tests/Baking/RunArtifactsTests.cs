@@ -160,7 +160,7 @@ public sealed class RunArtifactsTests
 
         var all = RoostSheets.All(packs);
 
-        Assert.Equal(16, all.Length);
+        Assert.Equal(44, all.Length);
         Assert.All(all, r => Assert.Equal(SheetGeometry.Curated, r.Geometry));
 
         var names = all.AsValueEnumerable().Select(static r => r.Name).ToArray();

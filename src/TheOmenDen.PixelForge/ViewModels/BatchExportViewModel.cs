@@ -110,6 +110,7 @@ public sealed partial class BatchExportViewModel : ObservableObject
             OnPropertyChanged();
             OnPropertyChanged(nameof(ModeDescription));
             OnPropertyChanged(nameof(PlannedCount));
+            OnPropertyChanged(nameof(PlannedCounts));
 
             ExportCommand.NotifyCanExecuteChanged();
         }
@@ -143,6 +144,29 @@ public sealed partial class BatchExportViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(ExportRoostSetCommand))]
     public partial string OutputFolder { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// What new hero directories are named after — the base body archetype, such as
+    /// <c>villager</c>.
+    /// </summary>
+    /// <remarks>
+    /// Gates the export, because a hero cannot be given a directory without one. A body already in
+    /// the registry keeps the name it has whatever is typed here; this only names new ones.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    public partial string HeroPrefix { get; set; } = "villager";
+
+    /// <summary>
+    /// The class this run's ticked equipment belongs to, such as <c>ranger</c>.
+    /// </summary>
+    /// <remarks>
+    /// Optional, unlike the prefix. Blank means the run writes hero sheets and attachment layers
+    /// but names no loadout — the pure paper-doll output, which is useful on its own.
+    /// </remarks>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    public partial string ClassName { get; set; } = string.Empty;
+
     /// <summary>Whether the three pack roots resolve; drives the page's warning bar.</summary>
     public bool PacksMissing => !_packs.Resolved.HasValue;
 
@@ -174,11 +198,17 @@ public sealed partial class BatchExportViewModel : ObservableObject
     /// ten slots of a 995-file library pass <see langword="int"/> easily, and a label reading a
     /// negative number is worse than one reading an implausible one.
     /// </remarks>
+    /// <summary>
+    /// What the run consists of, broken out. The parts are worth more than the total now that a
+    /// layer run is double digits rather than five.
+    /// </summary>
+    public PlannedCounts PlannedCounts => LayerPlan.Count(Selections(), SelectedTones());
+
     public long PlannedCount
     {
         get
         {
-            var planned = BatchPlan.Count(Selections(), SelectedTones());
+            var planned = PlannedCounts.Sheets;
 
             if (Mode is not ExportMode.Both)
             {
@@ -248,7 +278,26 @@ public sealed partial class BatchExportViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanExport), IncludeCancelCommand = true)]
     private async Task ExportAsync(CancellationToken cancellationToken)
     {
-        var planned = ExportPlan.Recipes(Selections(), SelectedTones(), Mode);
+        var output = FullPath.FromPath(OutputFolder);
+        var selections = Selections();
+
+        // The registry is read before anything is planned, because a hero's directory name is an
+        // input to the plan rather than a consequence of it. A registry that cannot be trusted
+        // stops the run here: renumbering over an existing tree is the corruption the read-back
+        // exists to prevent.
+        var known = await HeroRegistry.ReadAsync(output, cancellationToken);
+
+        if (!known.TryGet(out var existing))
+        {
+            Notify(ExportPlan.Explain(known.Error), StatusLevel.Error);
+
+            return;
+        }
+
+        var heroes = HeroRegistry.Assign(
+            existing, LayerPlan.HeroKeys(selections), ExportNames.Slugged(HeroPrefix), BatchManifest.NewRunId());
+
+        var planned = ExportPlan.Layers(selections, SelectedTones(), Mode, HeroRegistry.Labels(heroes));
 
         if (!planned.TryGet(out var recipes))
         {
@@ -257,12 +306,20 @@ public sealed partial class BatchExportViewModel : ObservableObject
             return;
         }
 
+        var run = new LayerRun
+        {
+            RunId = BatchManifest.NewRunId(),
+            Heroes = heroes,
+            ClassName = ExportNames.Slugged(ClassName),
+            Pool = LoadoutWriter.PoolOf(selections),
+        };
+
         if (recipes.Length > WarnThreshold)
         {
             Notify($"{recipes.Length} files planned. This will take a while.", StatusLevel.Warning);
         }
 
-        await RunAsync(recipes, cancellationToken);
+        await RunAsync(recipes, output, run, cancellationToken);
     }
 
     /// <summary>
@@ -292,7 +349,19 @@ public sealed partial class BatchExportViewModel : ObservableObject
             return;
         }
 
-        await RunAsync(RoostSheets.All(packs), cancellationToken);
+        // curated/ is the run's root, not a subdirectory of it: the deliverable carries its own
+        // manifest set, and a manifest must describe files relative to itself. Creating it here is
+        // consistent with the rule BatchBaker follows -- subdirectories are ours, the root is the
+        // user's and is never invented.
+        var curated = FullPath.FromPath(OutputFolder) / "curated";
+
+        Directory.CreateDirectory(curated.Value);
+
+        await RunAsync(
+            RoostSheets.All(packs),
+            curated,
+            new LayerRun { RunId = BatchManifest.NewRunId() },
+            cancellationToken);
     }
 
     /// <summary>
@@ -302,10 +371,12 @@ public sealed partial class BatchExportViewModel : ObservableObject
     /// Shared by both export commands so they cannot drift on progress handling, cancellation, or
     /// which manifests get written — the two differ only in how the recipes were chosen.
     /// </remarks>
-    private async Task RunAsync(ImmutableArray<SheetRecipe> recipes, CancellationToken cancellationToken)
+    private async Task RunAsync(
+        ImmutableArray<SheetRecipe> recipes,
+        FullPath output,
+        LayerRun run,
+        CancellationToken cancellationToken)
     {
-        var output = FullPath.FromPath(OutputFolder);
-
         IsExporting = true;
         ProgressValue = 0;
         ProgressText = $"0 / {recipes.Length}";
@@ -321,7 +392,7 @@ public sealed partial class BatchExportViewModel : ObservableObject
 
         try
         {
-            var run = await BatchBaker.RunAsync(
+            var baked = await BatchBaker.RunAsync(
                 recipes,
                 output,
                 progress,
@@ -330,10 +401,10 @@ public sealed partial class BatchExportViewModel : ObservableObject
 
             // A run that could not lay out its folders wrote nothing, so there are no manifests to
             // write either — reporting the cause and stopping is the whole of the handling.
-            if (!run.TryGet(out var summary))
+            if (!baked.TryGet(out var summary))
             {
                 Notify(
-                    run.Error is BakeFailure.OutputDirectoryUnavailable
+                    baked.Error is BakeFailure.OutputDirectoryUnavailable
                         ? "That output folder is not there any more. Pick it again in Settings."
                         : "Could not create the export folders. Check the output folder is writable.",
                     StatusLevel.Error);
@@ -345,7 +416,14 @@ public sealed partial class BatchExportViewModel : ObservableObject
 
             // Deliberately not passed the run's token: the sheets are already on disk, so a
             // cancelled run still needs its manifests or the files it did write are unindexed.
-            await WriteManifestsAsync(output, new LayerRun { RunId = BatchManifest.NewRunId() }, recipes);
+            await WriteManifestsAsync(output, run, recipes);
+
+            // Only after a run that actually finished. A cancelled or failed one has orphans by
+            // definition, and naming them would pile noise on an error the user already saw.
+            if (!summary.Cancelled)
+            {
+                ReportOrphans(output, recipes);
+            }
         }
         finally
         {
@@ -365,10 +443,16 @@ public sealed partial class BatchExportViewModel : ObservableObject
     private bool CanExportRoostSet() =>
         !IsExporting && !PacksMissing && !string.IsNullOrWhiteSpace(OutputFolder);
 
+    /// <summary>
+    /// A run needs somewhere to write, something to write, and a usable prefix to name new heroes
+    /// after. A class name is optional; a class named with nothing ticked is not.
+    /// </summary>
     private bool CanExport() =>
         !IsExporting
         && !PacksMissing
         && !string.IsNullOrWhiteSpace(OutputFolder)
+        && ExportNames.IsUsable(HeroPrefix)
+        && (ClassName.Length is 0 || ExportNames.IsUsable(ClassName))
         && PlannedCount > 0;
 
     private void Notify(string message, StatusLevel level) =>
@@ -411,6 +495,29 @@ public sealed partial class BatchExportViewModel : ObservableObject
     /// Which manifests a run calls for is <see cref="RunArtifacts"/>'s decision, not this page's —
     /// it is the same rule whoever asks, and it is testable there without a window.
     /// </remarks>
+    /// <summary>
+    /// Names sheets the folder still holds that this run did not write.
+    /// </summary>
+    /// <remarks>
+    /// The original bug was that these went unindexed and unmentioned. They are reported and left
+    /// alone: the files are the user's, and a stale sheet named in a notice beats a wanted one
+    /// silently deleted.
+    /// </remarks>
+    private void ReportOrphans(FullPath output, ImmutableArray<SheetRecipe> recipes)
+    {
+        var orphans = OrphanScan.Find(output, recipes);
+
+        if (orphans.IsEmpty)
+        {
+            return;
+        }
+
+        Notify(
+            $"{orphans.Length} sheet(s) from an earlier run are not in this manifest, starting with "
+            + $"{orphans[0]}. They are still on disk.",
+            StatusLevel.Warning);
+    }
+
     private async Task WriteManifestsAsync(FullPath output, LayerRun run, ImmutableArray<SheetRecipe> recipes)
     {
         foreach (var failure in await RunArtifacts.WriteAllAsync(output, run, recipes))
@@ -482,6 +589,7 @@ public sealed partial class BatchExportViewModel : ObservableObject
 
         OnPropertyChanged(nameof(PacksMissing));
         OnPropertyChanged(nameof(PlannedCount));
+        OnPropertyChanged(nameof(PlannedCounts));
 
         ExportCommand.NotifyCanExecuteChanged();
     }
@@ -500,6 +608,7 @@ public sealed partial class BatchExportViewModel : ObservableObject
         }
 
         OnPropertyChanged(nameof(PlannedCount));
+        OnPropertyChanged(nameof(PlannedCounts));
 
         ExportCommand.NotifyCanExecuteChanged();
     }

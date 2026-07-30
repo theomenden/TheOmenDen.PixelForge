@@ -122,11 +122,81 @@ public static class RoostSheets
         return recipes.ToImmutable();
     }
 
+    /// <summary>
+    /// The equipment the ten-slot contract ships, by slot folder and stem.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every base the core pack offers for these slots, rather than a curated subset. Hair earned a
+    /// hand-picked nine because the packs ship far more than a roster needs and silhouette variety
+    /// was the scarce thing; here the whole set is six hats, eight weapons and fourteen extras, all
+    /// of which a consumer might reasonably equip.
+    /// </para>
+    /// <para>
+    /// <see cref="AssetSlot.Shadow"/> is deliberately absent, for the same reason
+    /// <see cref="BodyLayers"/> omits it: it is optional in the generator and the overlay composes
+    /// its own stack.
+    /// </para>
+    /// <para>
+    /// <c>bow1arrow1</c> is a composite of two others and is kept on purpose — a slot draws at most
+    /// one layer, so a nocked bow cannot be assembled from <c>bow1</c> and <c>arrow1</c> at runtime.
+    /// </para>
+    /// </remarks>
+    private static ImmutableArray<(AssetSlot Slot, string Prefix, ImmutableArray<string> Bases)> EquipmentPicks { get; } =
+    [
+        (AssetSlot.BackHair, "backhair", ["backhair1", "backhair2", "backhair3", "backhair4", "backhair5"]),
+        (AssetSlot.BackExtra, "backextra", ["backextra1", "backextra2", "backextra3"]),
+        (AssetSlot.FrontExtra, "frontextra",
+            ["frontextra1", "frontextra2", "frontextra3", "frontextra4", "frontextra5", "frontextra6"]),
+        (AssetSlot.Hat, "hat", ["hat1", "hat2", "hat3", "hat4", "hat5", "hat6"]),
+        (AssetSlot.Weapon, "weapon",
+            ["arrow1", "bow1", "bow1arrow1", "pickaxe1", "shield1L", "shield1R", "spear1", "sword1"]),
+    ];
+
+    /// <summary>
+    /// The equipment layers, each baked alone on transparency exactly as <see cref="Hair"/> is.
+    /// </summary>
+    /// <param name="packs">Where the source packs live. Never <see langword="null"/>.</param>
+    /// <returns>
+    /// One recipe per pick, named <c>&lt;slot&gt;-01</c> upwards within each slot.
+    /// </returns>
+    /// <remarks>
+    /// The skin flag comes from <see cref="AssetSlots.IsSkinBearing"/> rather than being restated,
+    /// which is what keeps a weapon's wooden shaft and a hat's trim in their authored colours: both
+    /// use source-ramp hexes, and recolouring them would turn a Bone-toned character's bow white.
+    /// </remarks>
+    public static ImmutableArray<SheetRecipe> Equipment(SourcePacks packs)
+    {
+        Guard.IsNotNull(packs);
+
+        var recipes = ImmutableArray.CreateBuilder<SheetRecipe>();
+
+        foreach (var (slot, prefix, bases) in EquipmentPicks)
+        {
+            var folder = AssetSlots.FolderName(slot);
+
+            for (var i = 0; i < bases.Length; i++)
+            {
+                recipes.Add(new()
+                {
+                    Name = $"{prefix}-{i + 1:00}",
+                    Layers = [new(packs.Partial(ElementsPack.Core, folder, bases[i] + ".png"), AssetSlots.IsSkinBearing(slot))],
+                });
+            }
+        }
+
+        return recipes.ToImmutable();
+    }
+
     /// <summary>Every sheet the spec ships, bodies first.</summary>
     /// <param name="packs">Where the source packs live. Never <see langword="null"/>.</param>
-    /// <returns><see cref="Bodies"/> followed by <see cref="Hair"/>.</returns>
+    /// <returns><see cref="Bodies"/>, then <see cref="Hair"/>, then <see cref="Equipment"/>.</returns>
+    /// <remarks>
+    /// Order is part of the contract: bodies and hair keep the indices they had at two slots, so
+    /// the ten-slot growth appends rather than renumbering anything a consumer already reads.
+    /// </remarks>
     public static ImmutableArray<SheetRecipe> All(SourcePacks packs) =>
-        [.. Bodies(packs), .. Hair(packs)];
+        [.. Bodies(packs), .. Hair(packs), .. Equipment(packs)];
 
     /// <summary>
     /// The spec-079 art as a picker selection, so the shipped set can be loaded, inspected and

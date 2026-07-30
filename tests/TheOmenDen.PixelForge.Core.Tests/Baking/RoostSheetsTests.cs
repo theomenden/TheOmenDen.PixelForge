@@ -37,21 +37,29 @@ public sealed class RoostSheetsTests : IDisposable
     {
         var names = RoostSheets.All(Packs).AsSpan().Select(static recipe => recipe.Name).ToArray();
 
-        Assert.Equal(16, names.Length);
+        // 7 bodies + 9 hair + 28 equipment. The sixteen the two-slot contract shipped keep both
+        // their names and their indices; the ten-slot growth appends.
+        Assert.Equal(44, names.Length);
         Assert.Contains("body-01", names, StringComparer.Ordinal);
         Assert.Contains("body-07", names, StringComparer.Ordinal);
         Assert.Contains("hair-01", names, StringComparer.Ordinal);
         Assert.Contains("hair-09", names, StringComparer.Ordinal);
+        Assert.Contains("hat-01", names, StringComparer.Ordinal);
+        Assert.Contains("weapon-08", names, StringComparer.Ordinal);
     }
 
     [Fact]
-    public void All_IsBodiesThenHair()
+    public void All_IsBodiesThenHairThenEquipment()
     {
         var all = RoostSheets.All(Packs);
 
-        Assert.Equal(RoostSheets.Bodies(Packs).Length + RoostSheets.Hair(Packs).Length, all.Length);
+        Assert.Equal(
+            RoostSheets.Bodies(Packs).Length + RoostSheets.Hair(Packs).Length + RoostSheets.Equipment(Packs).Length,
+            all.Length);
+
         Assert.Equal("body-01", all[0].Name);
-        Assert.StartsWith("hair-", all[^1].Name, StringComparison.Ordinal);
+        Assert.Equal("hair-01", all[7].Name);
+        Assert.StartsWith("weapon-", all[^1].Name, StringComparison.Ordinal);
     }
 
     [Fact]
