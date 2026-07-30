@@ -77,6 +77,7 @@ public static class BatchManifest
             Name = recipe.Name,
             File = recipe.RelativePath,
             Geometry = recipe.Geometry.ToString(),
+            Format = recipe.Format.ToString(),
             Tone = recipe.Tone.TryGet(out var ramp) ? ramp.Name : string.Empty,
             Shadow = stems[(int)AssetSlot.Shadow],
             BackExtra = stems[(int)AssetSlot.BackExtra],
@@ -172,6 +173,7 @@ public static class BatchManifest
                 line[nameof(row.Name)].Set(row.Name);
                 line[nameof(row.File)].Set(row.File);
                 line[nameof(row.Geometry)].Set(row.Geometry);
+                line[nameof(row.Format)].Set(row.Format);
                 line[nameof(row.Tone)].Set(row.Tone);
                 line[nameof(row.Shadow)].Set(row.Shadow);
                 line[nameof(row.BackExtra)].Set(row.BackExtra);

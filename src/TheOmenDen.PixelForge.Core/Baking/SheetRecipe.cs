@@ -52,8 +52,20 @@ public sealed record SheetRecipe
     /// sheet is and nothing catches it.
     /// </remarks>
     public string RelativePath => Directory.Length is 0
-        ? Name + SheetWriter.Extension
-        : $"{Directory}/{Name}{SheetWriter.Extension}";
+        ? Name + SheetWriter.ExtensionFor(Format)
+        : $"{Directory}/{Name}{SheetWriter.ExtensionFor(Format)}";
+
+    /// <summary>
+    /// Which container to encode into. Defaults to <see cref="SheetFormat.Webp"/>, so a recipe
+    /// that says nothing cannot change what Corvus receives.
+    /// </summary>
+    /// <remarks>
+    /// A peer of <see cref="Geometry"/> rather than a mode of it: the two are independent, and a
+    /// run legitimately writes the same geometry into both containers for two different consumers.
+    /// No collision follows, because the extension differs — which is also why
+    /// <see cref="LayerPlan"/>'s geometry marking needs no third axis.
+    /// </remarks>
+    public SheetFormat Format { get; init; } = SheetFormat.Webp;
 
     /// <summary>
     /// Layers back to front, following the generator's <c>CharacterLayers</c> order — which is

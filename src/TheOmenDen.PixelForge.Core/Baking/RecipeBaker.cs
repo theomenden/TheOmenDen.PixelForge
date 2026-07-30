@@ -163,7 +163,7 @@ public static class RecipeBaker
         if (recipe.Geometry is SheetGeometry.Full)
         {
             // Full geometry *is* the assembly — no remap, so nothing to curate.
-            return LosslessWebp.EncodeVerified(assembled);
+            return SheetEncoder.EncodeVerified(assembled, recipe.Format);
         }
 
         var curation = SheetBaker.Curate(assembled);
@@ -175,7 +175,7 @@ public static class RecipeBaker
 
         using (curated)
         {
-            return LosslessWebp.EncodeVerified(curated);
+            return SheetEncoder.EncodeVerified(curated, recipe.Format);
         }
     }
 }

@@ -78,8 +78,9 @@ public static class OrphanScan
         // Directory.EnumerateFiles + LINQ.
         foreach (var entry in directory.Descendants())
         {
-            if (entry is not FileInfo file
-                || !file.Name.EndsWith(SheetWriter.Extension, StringComparison.OrdinalIgnoreCase))
+            // Every format, not the WebP literal: a run that writes PNG leaves stale PNGs, and
+            // matching one extension made those invisible to the scan that exists to find them.
+            if (entry is not FileInfo file || !SheetWriter.IsSheetFile(file.Name))
             {
                 continue;
             }

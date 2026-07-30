@@ -16,11 +16,12 @@ public sealed class OrphanScanTests : IDisposable
 
     private FullPath Root => _directory.FullPath;
 
-    private static SheetRecipe Recipe(string name, string directory) => new()
+    private static SheetRecipe Recipe(string name, string directory, SheetFormat format = SheetFormat.Webp) => new()
     {
         Name = name,
         Directory = directory,
         Layers = [],
+        Format = format,
     };
 
     /// <summary>Puts a sheet on disk without baking one.</summary>
@@ -45,6 +46,37 @@ public sealed class OrphanScanTests : IDisposable
         ];
 
         Assert.Empty(OrphanScan.Find(Root, recipes));
+    }
+
+    /// <summary>
+    /// The scan matched the WebP extension alone. Once a run can write PNG, that makes every stale
+    /// PNG invisible to it — the scan reports a clean tree while orphans pile up beside the sheets
+    /// it did index, which is the exact failure the scan exists to prevent.
+    /// </summary>
+    [Fact]
+    public void Find_ReportsStalePngSheets_NotOnlyWebpOnes()
+    {
+        Place("attachments/hat/hat1.png");
+        Place("attachments/hat/hat2.png");
+
+        var orphans = OrphanScan.Find(Root, [Recipe("hat1", "attachments/hat", SheetFormat.Png)]);
+
+        Assert.Equal(["attachments/hat/hat2.png"], orphans);
+    }
+
+    /// <summary>
+    /// The same stem in both containers is two files for two consumers, not a duplicate. A run
+    /// writing only the WebP leaves the PNG genuinely stale.
+    /// </summary>
+    [Fact]
+    public void Find_TreatsTheTwoContainersAsSeparateFiles()
+    {
+        Place("attachments/hat/hat1.webp");
+        Place("attachments/hat/hat1.png");
+
+        var orphans = OrphanScan.Find(Root, [Recipe("hat1", "attachments/hat")]);
+
+        Assert.Equal(["attachments/hat/hat1.png"], orphans);
     }
 
     /// <summary>The case that motivates the scan: a later run ticks fewer hats.</summary>

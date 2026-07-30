@@ -16,6 +16,7 @@ public sealed class BatchManifestTests
         Name = name,
         File = name + ".webp",
         Geometry = nameof(SheetGeometry.Curated),
+        Format = nameof(SheetFormat.Webp),
         Tone = "Tone 3",
         Bottom = "bottom1",
         Top = "top11",
@@ -63,7 +64,10 @@ public sealed class BatchManifestTests
         var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
 
         Assert.Equal(3, lines.Length);
-        Assert.StartsWith("RunId,Name,File,Geometry,Tone,", lines[0], StringComparison.Ordinal);
+        // Format sits beside Geometry because it is its peer, and because Sep derives the header
+        // from the order columns are first set — so this string is the column order, not a summary
+        // of it.
+        Assert.StartsWith("RunId,Name,File,Geometry,Format,Tone,", lines[0], StringComparison.Ordinal);
         Assert.StartsWith(runId.ToString("D") + ",a,", lines[1], StringComparison.Ordinal);
     }
 

@@ -36,5 +36,36 @@ public sealed class SheetRecipeTests
     /// <summary>A recipe that says nothing about placement still names a file, never a bare extension.</summary>
     [Fact]
     public void RelativePath_AlwaysCarriesTheExtension() =>
-        Assert.EndsWith(SheetWriter.Extension, Recipe("attachments/hat").RelativePath, StringComparison.Ordinal);
+        Assert.EndsWith(
+            SheetWriter.ExtensionFor(SheetFormat.Webp),
+            Recipe("attachments/hat").RelativePath,
+            StringComparison.Ordinal);
+
+    /// <summary>
+    /// The format a recipe names is what its path carries. Corvus reads <c>.webp</c> and neither
+    /// Unity nor MonoGame can open one, so this is the single point where that difference becomes
+    /// a filename — and therefore the only thing both manifests have to agree about.
+    /// </summary>
+    [Fact]
+    public void RelativePath_WhenTheRecipeNamesPng_CarriesThePngExtension()
+    {
+        var recipe = new SheetRecipe
+        {
+            Name = "villager_01",
+            Layers = [],
+            Directory = "heroes/villager_01",
+            Format = SheetFormat.Png,
+        };
+
+        Assert.Equal("heroes/villager_01/villager_01.png", recipe.RelativePath);
+    }
+
+    /// <summary>
+    /// Silence means WebP. <see cref="SheetFormat.Webp"/> is <c>0</c> for the same reason
+    /// <see cref="SheetGeometry.Curated"/> is: a recipe that says nothing must not be able to
+    /// change what Corvus receives.
+    /// </summary>
+    [Fact]
+    public void Format_WhenUnstated_IsWebp() =>
+        Assert.Equal(SheetFormat.Webp, Recipe(string.Empty).Format);
 }

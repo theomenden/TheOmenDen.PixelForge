@@ -221,7 +221,7 @@ public static class BatchBaker
 
         using (sheet)
         {
-            return SheetWriter.Write(Destination(root, recipe), recipe.Name, sheet);
+            return SheetWriter.Write(Destination(root, recipe), recipe.Name, sheet, recipe.Format);
         }
     }
 

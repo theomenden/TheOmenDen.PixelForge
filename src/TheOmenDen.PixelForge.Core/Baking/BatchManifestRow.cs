@@ -23,6 +23,18 @@ public sealed record BatchManifestRow
     /// </summary>
     public required string Geometry { get; init; }
 
+    /// <summary>
+    /// Which <see cref="SheetFormat"/> was written, as text for the same reason
+    /// <see cref="Geometry"/> is.
+    /// </summary>
+    /// <remarks>
+    /// A column rather than something to be read out of <see cref="File"/>'s extension. Both are
+    /// derivable from that string, but "every PNG sheet" has to be a column filter to be usable in
+    /// the spreadsheet this file exists for — which is exactly the argument that gave
+    /// <see cref="Geometry"/> its own column.
+    /// </remarks>
+    public required string Format { get; init; }
+
     /// <summary>Name of the skin ramp applied, or blank when the sheet carries no skin.</summary>
     public string Tone { get; init; } = string.Empty;
 
