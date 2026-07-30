@@ -27,6 +27,16 @@ public static class GeneratorClips
     public const int FrameDurationMilliseconds = 300;
 
     /// <summary>
+    /// The same cadence in seconds, divided once at type initialisation.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than at the call site so the division happens once for the process instead of
+    /// on every caller that wants a clip length in seconds, and so there is one definition of the
+    /// conversion rather than a <c>/ 1000.0</c> repeated wherever it is needed.
+    /// </remarks>
+    public static double FrameDurationSeconds { get; } = FrameDurationMilliseconds / 1000.0;
+
+    /// <summary>
     /// Source rows top to bottom. Full geometry keeps all four; the curated sheet drops
     /// <c>north</c> — see <see cref="SheetLayout.FacingCount"/>.
     /// </summary>
