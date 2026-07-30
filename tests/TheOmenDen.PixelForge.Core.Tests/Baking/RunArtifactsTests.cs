@@ -142,4 +142,31 @@ public sealed class RunArtifactsTests
             failures,
             f => string.Equals(f.File, RunManifest.FileName, StringComparison.Ordinal) && f.Failure is BakeFailure.ManifestSchemaViolation);
     }
+
+    /// <summary>The spec-079 deliverable is curated, whatever the page's mode toggle says.</summary>
+    [Fact]
+    public void RoostSheets_All_AreCuratedAndNamedForTheRegistry()
+    {
+        var packs = new SourcePacks
+        {
+            CoreAssets = FullPath.FromPath(Path.Combine(Path.GetTempPath(), "core")),
+            Expansion1Assets = FullPath.FromPath(Path.Combine(Path.GetTempPath(), "e1")),
+            Expansion2Assets = FullPath.FromPath(Path.Combine(Path.GetTempPath(), "e2")),
+        };
+
+        var all = RoostSheets.All(packs);
+
+        Assert.Equal(16, all.Length);
+        Assert.All(all, r => Assert.Equal(SheetGeometry.Curated, r.Geometry));
+
+        var names = all.AsValueEnumerable().Select(static r => r.Name).ToArray();
+
+        Assert.Equal("body-01", names[0]);
+        Assert.Equal("body-07", names[6]);
+        Assert.Equal("hair-01", names[7]);
+        Assert.Equal("hair-09", names[15]);
+
+        // Hair bakes as its own sheet with no body under it — one layer, not a composite.
+        Assert.All(all.AsSpan()[7..].ToArray(), r => Assert.Single(r.Layers));
+    }
 }

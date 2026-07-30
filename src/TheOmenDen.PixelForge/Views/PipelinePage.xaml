@@ -307,6 +307,17 @@
                     AutomationProperties.Name="Load the spec-079 selection"
                     Command="{x:Bind ViewModel.LoadRoostSelectionCommand}"
                     Content="Roost set (079)" />
+                <!--
+                    Bakes the named deliverable rather than the picker's cross product, so it
+                    ignores both the selection and the mode toggle. Its own button because the
+                    two produce different files under different names — see ExportRoostSetCommand.
+                -->
+                <Button
+                    AutomationProperties.AutomationId="BtnExportRoostSet"
+                    AutomationProperties.Name="Export the spec-079 deliverable"
+                    Command="{x:Bind ViewModel.ExportRoostSetCommand}"
+                    Content="Export 079 set"
+                    ToolTipService.ToolTip="Bake body-01..07 and hair-01..09 as Corvus names them, curated geometry, ignoring the picker." />
                 <Button
                     AutomationProperties.AutomationId="BtnExport"
                     Command="{x:Bind ViewModel.ExportCommand}"

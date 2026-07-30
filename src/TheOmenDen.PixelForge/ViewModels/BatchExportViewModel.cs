@@ -138,6 +138,7 @@ public sealed partial class BatchExportViewModel : ObservableObject
     /// <summary>Where sheets and manifests are written.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ExportRoostSetCommand))]
     public partial string OutputFolder { get; private set; } = string.Empty;
 
     /// <summary>Whether the three pack roots resolve; drives the page's warning bar.</summary>
@@ -263,6 +264,36 @@ public sealed partial class BatchExportViewModel : ObservableObject
     }
 
     /// <summary>
+    /// Bakes the spec-079 deliverable: seven bodies and nine hair sheets, named as Corvus expects.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Distinct from <see cref="ExportCommand"/>, and not a shortcut for it. The picker plans a
+    /// cross product and names each sheet from the partials that went into it, which is right for
+    /// exploring but produces stems no cosmetic registry knows. <see cref="RoostSheets.All"/> names
+    /// the sixteen files explicitly, and bakes hair as its own sheet with no body under it rather
+    /// than as a composite — see <see cref="RoostSheets"/> for why that is the shipped shape.
+    /// </para>
+    /// <para>
+    /// <see cref="Mode"/> is deliberately ignored. The geometry is part of the contract, so the
+    /// recipes carry <see cref="SheetGeometry.Curated"/> and a mode toggle must not be able to ship
+    /// a raw assembly to a consumer expecting 240x1152.
+    /// </para>
+    /// </remarks>
+    [RelayCommand(CanExecute = nameof(CanExportRoostSet), IncludeCancelCommand = true)]
+    private async Task ExportRoostSetAsync(CancellationToken cancellationToken)
+    {
+        if (!_packs.Resolved.TryGet(out var packs))
+        {
+            Notify("No packs configured. Set the three pack folders in Settings.", StatusLevel.Warning);
+
+            return;
+        }
+
+        await RunAsync(RoostSheets.All(packs), cancellationToken);
+    }
+
+    /// <summary>
     /// Bakes <paramref name="recipes"/>, reports the summary, and writes the manifests beside them.
     /// </summary>
     /// <remarks>
@@ -308,6 +339,13 @@ public sealed partial class BatchExportViewModel : ObservableObject
             }
         }
     }
+
+    /// <summary>
+    /// The deliverable needs packs and a folder, but no selection — its art is named in code, so
+    /// <see cref="PlannedCount"/> being zero must not disable it.
+    /// </summary>
+    private bool CanExportRoostSet() =>
+        !IsExporting && !PacksMissing && !string.IsNullOrWhiteSpace(OutputFolder);
 
     private bool CanExport() =>
         !IsExporting
