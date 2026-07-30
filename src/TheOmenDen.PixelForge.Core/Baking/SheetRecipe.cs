@@ -68,6 +68,18 @@ public sealed record SheetRecipe
     public SheetFormat Format { get; init; } = SheetFormat.Webp;
 
     /// <summary>
+    /// Which pack these layers are authored in, naming the palette a recolour reads from.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Tone"/> has only ever named the palette a recolour goes <em>to</em>; the one it
+    /// came from was assumed to be Time Elements' authored ramp. That assumption is invisible and
+    /// fails quietly — the two packs share no colour, so a Time Fantasy sheet built against the
+    /// wrong source table matches nothing and comes out in its authored palette with no error
+    /// anywhere. Stating the pack is what makes the pair explicit.
+    /// </remarks>
+    public SourcePack Pack { get; init; } = SourcePack.TimeElements;
+
+    /// <summary>
     /// Layers back to front, following the generator's <c>CharacterLayers</c> order — which is
     /// also <see cref="Catalog.AssetSlot"/>'s member order, so a planner can sort by slot.
     /// </summary>

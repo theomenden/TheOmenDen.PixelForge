@@ -82,12 +82,7 @@ public static class RecipeBaker
             return new(BakeFailure.NoLayersSupplied);
         }
 
-        // The TryGet must stay inside the ternary: hoisting it into a `hasTone` local first loses
-        // the compiler's proof that `ramp` is non-null, and nullable analysis is an error here.
-        var substitution = recipe.Tone.TryGet(out var ramp)
-            ? ramp.SubstitutionFrom(SkinRamps.Source)
-            : default;
-
+        var substitution = SubstitutionFor(recipe);
         var hasTone = recipe.Tone.HasValue;
 
         // Created on the first decoded layer rather than up front, because that layer is what
@@ -133,6 +128,37 @@ public static class RecipeBaker
             composite?.Dispose();
         }
     }
+
+    /// <summary>
+    /// The colour substitution a recipe describes, or the default when it carries no tone.
+    /// </summary>
+    /// <param name="recipe">The recipe being baked.</param>
+    /// <returns>
+    /// A table from the pack's authored palette to the recipe's tone, or <see langword="default"/>
+    /// — which <see cref="Prepare"/> never consults, because it only recolours when a tone is set.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// A recolour needs both ends. <see cref="SheetRecipe.Tone"/> has only ever named the palette it
+    /// goes to; the one it comes from was read from <see cref="SkinRamps.Source"/> unconditionally,
+    /// which was right for exactly as long as there was one pack. Time Fantasy shares no colour with
+    /// Time Elements, so that table would match nothing and hand back the sheet in its authored
+    /// palette without an error anywhere — the same silent no-op the two packs were always going to
+    /// risk, only inside the baker rather than at its edge.
+    /// </para>
+    /// <para>
+    /// The <c>TryGet</c> stays inside the expression: hoisting it into a local first loses the
+    /// compiler's proof that <c>ramp</c> is non-null, and nullable analysis is an error here.
+    /// </para>
+    /// </remarks>
+    private static RampSubstitution SubstitutionFor(SheetRecipe recipe) =>
+        recipe.Tone.TryGet(out var ramp)
+            ? recipe.Pack switch
+            {
+                SourcePack.TimeFantasy => TimeFantasyRamps.SubstitutionTo(ramp),
+                _ => ramp.SubstitutionFrom(SkinRamps.Source),
+            }
+            : default;
 
     /// <summary>
     /// Decodes one layer, validates it, and returns it in canonical format — recoloured when the
