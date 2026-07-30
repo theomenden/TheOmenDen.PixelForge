@@ -1,4 +1,5 @@
 using CommunityToolkit.Diagnostics;
+using CommunityToolkit.HighPerformance;
 using DotNext;
 using Meziantou.Framework;
 using SkiaSharp;
@@ -32,6 +33,21 @@ namespace TheOmenDen.PixelForge.Core.Spritesheets;
 /// </remarks>
 public sealed class SpriteFilmstrip : Disposable
 {
+    /// <summary>The conventional pose: facing south, the <c>stand</c> column.</summary>
+    private const int StillFacing = 0;
+
+    private const int StillColumn = 1;
+
+    /// <summary>
+    /// Alpha mask for a pixel read as a little-endian <see langword="uint"/>.
+    /// </summary>
+    /// <remarks>
+    /// RGBA8888 lays out R,G,B,A in ascending addresses, so that read is <c>0xAABBGGRR</c> and
+    /// alpha is the <em>high</em> byte. Masking the low byte would be testing red — the same trap
+    /// <see cref="Palettes.SkinRamp.PackedRgba"/> documents.
+    /// </remarks>
+    private const uint Opaque = 0xFF000000u;
+
     private readonly SKBitmap _assembly;
 
     private SpriteFilmstrip(SKBitmap assembly) => _assembly = assembly;
@@ -156,6 +172,99 @@ public sealed class SpriteFilmstrip : Disposable
         {
             return SheetBaker.Upscale(cell, scale);
         }
+    }
+
+    /// <summary>
+    /// A cell that actually has something in it, for use as a still.
+    /// </summary>
+    /// <param name="scale">Nearest-neighbour multiplier.</param>
+    /// <returns>The still, or the failure the crop hit. Never a fully transparent cell unless the
+    /// whole sheet is empty.</returns>
+    /// <remarks>
+    /// <para>
+    /// Taking the conventional pose — facing south, the <c>stand</c> column — and calling it the
+    /// thumbnail is wrong for 47 of the shipped partials, and wrong in a way that looks like a
+    /// broken decoder rather than a content fact. Tails and back hair draw <em>behind</em> the body,
+    /// so facing south the body hides them entirely; a bow, an arrow and a pickaxe only exist on the
+    /// clips that wield them, so at <c>stand</c> the character is not holding anything.
+    /// </para>
+    /// <para>
+    /// So the conventional pose is preferred and then fallen back on: the first cell carrying any
+    /// opaque pixel wins, scanned facing by facing. That keeps the 948 ordinary partials looking
+    /// consistent while giving the other 47 a thumbnail of the thing they actually are.
+    /// </para>
+    /// </remarks>
+    public Result<SKBitmap, BakeFailure> RenderStill(int scale)
+    {
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
+
+        var (facing, column) = FindContent();
+
+        return RenderCell(facing, column, scale);
+    }
+
+    /// <summary>
+    /// The conventional pose if it carries pixels, else the first cell that does.
+    /// </summary>
+    /// <remarks>
+    /// Reads the assembly's pixel memory once through <see cref="Span2D{T}"/> rather than cropping
+    /// 92 candidate cells and testing each — <c>SKBitmap.GetPixel</c> in a loop over a 1104x192
+    /// sheet is exactly the per-pixel call this project avoids.
+    /// </remarks>
+    private unsafe (int Facing, int Column) FindContent()
+    {
+        using var pixmap = _assembly.PeekPixels();
+
+        if (pixmap is null)
+        {
+            return (StillFacing, StillColumn);
+        }
+
+        var pitch = (_assembly.RowBytes / SheetLayout.BytesPerPixel) - _assembly.Width;
+        var grid = new Span2D<uint>((void*)_assembly.GetPixels(), _assembly.Height, _assembly.Width, pitch);
+
+        if (HasContent(grid, StillFacing, StillColumn))
+        {
+            return (StillFacing, StillColumn);
+        }
+
+        for (var facing = 0; facing < SheetLayout.SourceRows; facing++)
+        {
+            for (var column = 0; column < SheetLayout.SourceColumns; column++)
+            {
+                if (HasContent(grid, facing, column))
+                {
+                    return (facing, column);
+                }
+            }
+        }
+
+        return (StillFacing, StillColumn);
+    }
+
+    /// <summary>Whether any pixel of one cell is not fully transparent.</summary>
+    /// <remarks>
+    /// Alpha is the high byte: RGBA8888 lays out R,G,B,A in ascending addresses, so a little-endian
+    /// <see langword="uint"/> read of that memory is <c>0xAABBGGRR</c>. Testing the low byte would
+    /// be testing red.
+    /// </remarks>
+    private static bool HasContent(Span2D<uint> grid, int facing, int column)
+    {
+        var cell = grid.Slice(
+            facing * SheetLayout.CellSize,
+            column * SheetLayout.CellSize,
+            SheetLayout.CellSize,
+            SheetLayout.CellSize);
+
+        foreach (var pixel in cell)
+        {
+            if ((pixel & Opaque) is not 0)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Copies one cell out of the assembly, drawn rather than stride-arithmetic'd.</summary>

@@ -153,6 +153,100 @@ public sealed class SpriteFilmstripTests
         Assert.Equal(BakeFailure.SourceGeometryMismatch, rendered.Error);
     }
 
+    /// <summary>
+    /// A still must show the art, not the conventional pose, when the two disagree.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Regression. The thumbnail originally hardcoded facing south at the <c>stand</c> column,
+    /// which rendered 47 of the 995 shipped partials as blank tiles: tails and back hair draw
+    /// behind the body so the body hides them facing south, and the bow, arrow and pickaxe exist
+    /// only on the clips that wield them.
+    /// </para>
+    /// <para>
+    /// Modelled on <c>BackExtra/tail1.png</c> — empty facing south, drawn on the others.
+    /// </para>
+    /// </remarks>
+    [Fact]
+    public void RenderStill_FallsBackToACellThatHasContent()
+    {
+        using var root = TemporaryDirectory.Create();
+
+        var path = root.FullPath / "occluded.png";
+
+        using (var sheet = new SKBitmap(new SKImageInfo(
+            SheetLayout.SourceWidth, SheetLayout.SourceHeight, SKColorType.Rgba8888, SKAlphaType.Unpremul)))
+        {
+            using (var canvas = new SKCanvas(sheet))
+            {
+                canvas.Clear(SKColors.Transparent);
+
+                // Facing west (row 1) only, and only on the walk columns — south stays empty.
+                using var paint = new SKPaint { Color = SKColors.Magenta };
+
+                canvas.DrawRect(
+                    SKRect.Create(
+                        2 * SheetLayout.CellSize,
+                        1 * SheetLayout.CellSize,
+                        SheetLayout.CellSize,
+                        SheetLayout.CellSize),
+                    paint);
+            }
+
+            using var image = SKImage.FromBitmap(sheet);
+            using var data = image.Encode(SKEncodedImageFormat.Png, 100);
+            using var file = File.Create(path.Value);
+
+            data.SaveTo(file);
+        }
+
+        var opened = SpriteFilmstrip.Open(path);
+
+        Assert.True(opened.IsSuccessful, $"open failed with {opened.Error}");
+
+        using var strip = opened.Value;
+
+        // The conventional cell really is empty, so this test is testing what it claims to.
+        var conventional = strip.RenderCell(facing: 0, column: 1, scale: 1);
+
+        Assert.True(conventional.IsSuccessful);
+
+        using (var blank = conventional.Value)
+        {
+            Assert.Equal(0, blank.GetPixel(SheetLayout.CellSize / 2, SheetLayout.CellSize / 2).Alpha);
+        }
+
+        var still = strip.RenderStill(scale: 1);
+
+        Assert.True(still.IsSuccessful, $"still failed with {still.Error}");
+
+        using var rendered = still.Value;
+
+        Assert.Equal(
+            SKColors.Magenta,
+            rendered.GetPixel(SheetLayout.CellSize / 2, SheetLayout.CellSize / 2));
+    }
+
+    /// <summary>The conventional pose still wins when it has content, so ordinary art looks uniform.</summary>
+    [Fact]
+    public void RenderStill_PrefersTheConventionalPose()
+    {
+        using var root = TemporaryDirectory.Create();
+        using var strip = Filmstrip(root);
+
+        var still = strip.RenderStill(scale: 1);
+
+        Assert.True(still.IsSuccessful, $"still failed with {still.Error}");
+
+        using var rendered = still.Value;
+
+        // Striped encodes column in red and row in green: column 1, row 0.
+        var pixel = rendered.GetPixel(SheetLayout.CellSize / 2, SheetLayout.CellSize / 2);
+
+        Assert.Equal(10, pixel.Red);
+        Assert.Equal(0, pixel.Green);
+    }
+
     [Fact]
     public void Open_ReportsAMissingFile()
     {
