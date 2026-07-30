@@ -193,6 +193,40 @@ public sealed class RunArtifactsTests
         Assert.False(Exists(root, LoadoutWriter.CsvFileName));
     }
 
+    /// <summary>
+    /// One run, one id — across the registry as well as the two manifests.
+    /// </summary>
+    /// <remarks>
+    /// A real export caught this: the view model minted an id for the registry and a second one for
+    /// the run, so heroes.json claimed a hero was assigned in a run no manifest carried. Every file
+    /// still parsed, which is exactly why nothing noticed. This is the same hazard
+    /// <see cref="WriteAll_StampsTheSameRunIdIntoBothManifests"/> guards one level down.
+    /// </remarks>
+    [Fact]
+    public async Task WriteAll_StampsTheRunIdIntoTheRegistryToo()
+    {
+        using var root = TemporaryDirectory.Create();
+
+        var runId = BatchManifest.NewRunId();
+
+        var heroes = HeroRegistry.Assign(
+            [], [new HeroKey("bottom1", "top11", "head1")], "villager", runId);
+
+        await RunArtifacts.WriteAllAsync(
+            root.FullPath,
+            new LayerRun { RunId = runId, Heroes = heroes },
+            [Recipe("villager_01", SheetGeometry.Curated)],
+            TestContext.Current.CancellationToken);
+
+        var registry = await File.ReadAllTextAsync(
+            (root.FullPath / HeroRegistry.FileName).Value, TestContext.Current.CancellationToken);
+        var manifest = await File.ReadAllTextAsync(
+            (root.FullPath / RunManifest.FileName).Value, TestContext.Current.CancellationToken);
+
+        Assert.Contains(runId.ToString("D"), registry, StringComparison.Ordinal);
+        Assert.Contains(runId.ToString("D"), manifest, StringComparison.Ordinal);
+    }
+
     /// <summary>A run that knows heroes leaves the registry and its schema beside the manifests.</summary>
     [Fact]
     public async Task WriteAll_WritesTheRegistry_WhenTheRunHasHeroes()

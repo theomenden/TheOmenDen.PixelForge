@@ -294,8 +294,14 @@ public sealed partial class BatchExportViewModel : ObservableObject
             return;
         }
 
+        // Minted once and shared. RunArtifacts already documents why per-writer ids are wrong --
+        // two files that both parse cleanly and disagree about which run made them, with nothing
+        // to catch it. The registry is the same hazard one level up: a hero stamped with an id no
+        // manifest carries cannot be traced back to the run that created it.
+        var runId = BatchManifest.NewRunId();
+
         var heroes = HeroRegistry.Assign(
-            existing, LayerPlan.HeroKeys(selections), ExportNames.Slugged(HeroPrefix), BatchManifest.NewRunId());
+            existing, LayerPlan.HeroKeys(selections), ExportNames.Slugged(HeroPrefix), runId);
 
         var planned = ExportPlan.Layers(selections, SelectedTones(), Mode, HeroRegistry.Labels(heroes));
 
@@ -308,7 +314,7 @@ public sealed partial class BatchExportViewModel : ObservableObject
 
         var run = new LayerRun
         {
-            RunId = BatchManifest.NewRunId(),
+            RunId = runId,
             Heroes = heroes,
             ClassName = ExportNames.Slugged(ClassName),
             Pool = LoadoutWriter.PoolOf(selections),

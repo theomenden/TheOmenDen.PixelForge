@@ -339,7 +339,10 @@ public static class LoadoutWriter
                 continue;
             }
 
-            row[AssetSlots.FolderName(slot)].Set(Joined(loadout.SlotsValue, slot));
+            // The slot's member name, not FolderName's lowercase form: sheets.csv and heroes.csv
+            // both head their columns in PascalCase, and one file spelling them differently is the
+            // kind of thing a spreadsheet formula trips over.
+            row[slot.ToString()].Set(Joined(loadout.SlotsValue, slot));
         }
 
         row["AssignedInRun"].Format((Guid)loadout.AssignedInRun, "D");
