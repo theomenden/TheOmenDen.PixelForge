@@ -26,22 +26,6 @@ namespace TheOmenDen.PixelForge.Core.Baking;
 public static class BatchPlan
 {
     /// <summary>
-    /// How a ramp name becomes the tone segment of a stem.
-    /// </summary>
-    /// <remarks>
-    /// The separator is spelled out rather than left to the package default so the naming contract
-    /// lives here and not in a dependency's defaults, and
-    /// <see cref="SlugOptions.CanEndWithSeparator"/> is off because <c>"Tone 4 (Green)"</c>
-    /// otherwise slugs to a trailing <c>-</c> from the closing bracket.
-    /// </remarks>
-    private static readonly SlugOptions ToneSlug = new()
-    {
-        Separator = "-",
-        CanEndWithSeparator = false,
-        CasingTransformation = CasingTransformation.ToLowerCase,
-    };
-
-    /// <summary>
     /// Expands a per-slot selection into one recipe per combination, multiplied by the tone axis
     /// where a combination carries skin.
     /// </summary>
@@ -181,16 +165,25 @@ public static class BatchPlan
     /// <param name="tone">The tone the sheet is baked in, or none.</param>
     /// <returns>The stem, with a tone segment only where one is warranted.</returns>
     /// <remarks>
+    /// <para>
     /// Shared with <see cref="LayerPlan"/>, which names a hero's base sheet after the hero rather
     /// than after its partials but must suffix it identically. Lifting the rule here rather than
     /// restating it keeps one answer to "is this tone worth naming", including the
-    /// <see cref="SkinRamps.Source"/> exemption and the <see cref="ToneSlug"/> options.
+    /// <see cref="SkinRamps.Source"/> exemption.
+    /// </para>
+    /// <para>
+    /// The slug itself comes from <see cref="ExportNames.Slugged"/>, which used to be a second
+    /// identical set of options here. One policy for every typed name that becomes a path segment,
+    /// whether it names a directory or a tone — and a ramp name is arbitrary user text, so it needs
+    /// the leading-separator trim as much as a hero prefix does. <c>"(Ash)"</c> would otherwise
+    /// bake <c>villager_01_-ash.webp</c>.
+    /// </para>
     /// </remarks>
     internal static string WithTone(string stem, Optional<SkinRamp> tone) =>
         !tone.TryGet(out var ramp)
         || string.Equals(ramp.Name, SkinRamps.Source.Name, StringComparison.OrdinalIgnoreCase)
             ? stem
-            : $"{stem}_{Slug.Create(ramp.Name, ToneSlug)}";
+            : $"{stem}_{ExportNames.Slugged(ramp.Name)}";
 
     /// <summary>
     /// The selections that contribute a real axis, in draw order.

@@ -91,6 +91,27 @@ public sealed class LayerPlanTests
         Assert.Equal("villager_01", Assert.Single(recipes).Name);
     }
 
+    /// <summary>
+    /// A ramp name is arbitrary user text and becomes part of a filename, so it needs the same
+    /// leading-separator trim a hero prefix does — otherwise <c>"(Ash)"</c> bakes
+    /// <c>villager_01_-ash.webp</c>.
+    /// </summary>
+    [Fact]
+    public void Expand_NeverPutsASeparatorAfterTheUnderscore()
+    {
+        var awkward = new SkinRamp
+        {
+            Name = "(Ash)",
+            IsHuman = false,
+            Steps = SkinRamps.Source.Steps,
+        };
+
+        var name = Assert.Single(Expand(Body("bottom1"), [awkward])).Name;
+
+        Assert.Equal("villager_01_ash", name);
+        Assert.DoesNotContain("_-", name, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Expand_SuffixesEveryOtherToneOntoTheHeroLabel()
     {

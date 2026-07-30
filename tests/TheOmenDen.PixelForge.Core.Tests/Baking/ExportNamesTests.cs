@@ -12,8 +12,62 @@ public sealed class ExportNamesTests
     [InlineData("Villager Guard", "villager-guard")]
     [InlineData("  Ranger  ", "ranger")]
     [InlineData("Tone 4 (Green)", "tone-4-green")]
+    [InlineData("Chevalier Éclair", "chevalier-eclair")]
     public void Slugged_LowercasesAndSeparates(string typed, string expected) =>
         Assert.Equal(expected, ExportNames.Slugged(typed));
+
+    /// <summary>
+    /// Every character the slug drops from the front leaves a separator behind, and whitespace is
+    /// only the most obvious source. Trimming the input would catch the first of these and none of
+    /// the rest — which is why the trim is applied to the result.
+    /// </summary>
+    [Theory]
+    [InlineData("  Ranger", "ranger")]
+    [InlineData("🗡️ranger", "ranger")]
+    [InlineData("...ranger", "ranger")]
+    [InlineData("(ranger)", "ranger")]
+    public void Slugged_NeverStartsWithASeparator(string typed, string expected) =>
+        Assert.Equal(expected, ExportNames.Slugged(typed));
+
+    /// <summary>
+    /// A typed name cannot climb out of the export folder: separators and dots are not in the
+    /// allowed ranges, so the slug is the boundary rather than something checked beside one.
+    /// </summary>
+    [Theory]
+    [InlineData(@"..\..\escape")]
+    [InlineData("../../escape")]
+    [InlineData("/etc/passwd")]
+    public void Slugged_CannotEscapeTheOutputFolder(string typed)
+    {
+        var slug = ExportNames.Slugged(typed);
+
+        Assert.DoesNotContain('/', slug);
+        Assert.DoesNotContain('\\', slug);
+        Assert.DoesNotContain('.', slug);
+        Assert.False(Path.IsPathRooted(slug));
+    }
+
+    /// <summary>
+    /// Text with nothing in the allowed ranges slugs to nothing, and an unusable prefix is refused
+    /// rather than silently becoming a directory named for whatever survived.
+    /// </summary>
+    [Theory]
+    [InlineData("村人")]
+    [InlineData("🗡️")]
+    [InlineData("...")]
+    public void Slugged_IsEmpty_WhenNothingSurvives(string typed)
+    {
+        Assert.Empty(ExportNames.Slugged(typed));
+        Assert.False(ExportNames.IsUsable(typed));
+    }
+
+    /// <summary>
+    /// The library caps a segment at 80 by default, which is a tighter bound on a directory name
+    /// than anything worth restating — so a pathological prefix cannot push a path toward MAX_PATH.
+    /// </summary>
+    [Fact]
+    public void Slugged_IsBoundedInLength() =>
+        Assert.True(ExportNames.Slugged(new string('a', 500)).Length <= 80);
 
     [Theory]
     [InlineData("")]

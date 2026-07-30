@@ -19,6 +19,8 @@ public static class ExportNames
     /// The same options the tone segment uses, so <c>villager</c> and <c>Villager Guard</c> slug
     /// the way a reader of either name would expect, and nothing ends in a stray separator.
     /// </remarks>
+    private const char Separator = '-';
+
     private static readonly SlugOptions Options = new()
     {
         Separator = "-",
@@ -44,16 +46,32 @@ public static class ExportNames
 
     /// <summary>The slug a typed name produces, or empty when it produces none.</summary>
     /// <param name="typed">Whatever the user entered.</param>
-    /// <returns>The slug, lowercase and separator-safe at both ends.</returns>
+    /// <returns>The slug, lowercase and separator-free at both ends.</returns>
     /// <remarks>
-    /// The trim is not decoration. <see cref="SlugOptions"/> offers
-    /// <see cref="SlugOptions.CanEndWithSeparator"/> and no counterpart for the other end — checked,
-    /// and it is genuinely absent — so <c>"  Ranger  "</c> slugs to <c>-ranger</c> and would name a
-    /// directory with a leading dash. Trailing space is the library's problem and it solves it;
-    /// leading space is ours.
+    /// <para>
+    /// The leading trim is not decoration, and it is deliberately applied to the <em>result</em>
+    /// rather than the input. <see cref="SlugOptions"/> offers
+    /// <see cref="SlugOptions.CanEndWithSeparator"/> and — checked against 2.0.0, not only the
+    /// version that happened to be cached — no counterpart for the other end. Every leading
+    /// character the slug drops leaves a separator behind, and whitespace is only the most obvious
+    /// source: <c>"🗡️ranger"</c> slugs to <c>-ranger</c> and <c>"..\..\escape"</c> to
+    /// <c>-escape</c>. Trimming the input would have caught the first case and neither of the
+    /// others.
+    /// </para>
+    /// <para>
+    /// That the traversal attempt comes back as <c>escape</c> is worth stating: a typed name cannot
+    /// climb out of the export folder, because separators and dots are not in the allowed ranges to
+    /// begin with. The slug is the boundary, not a check bolted beside one.
+    /// </para>
+    /// <para>
+    /// <see cref="SlugOptions.MaximumLength"/> is left at the library's default of 80, which is
+    /// already a tighter bound on a directory segment than anything worth restating here.
+    /// </para>
     /// </remarks>
     public static string Slugged(string? typed) =>
-        string.IsNullOrWhiteSpace(typed) ? string.Empty : Slug.Create(typed.Trim(), Options);
+        string.IsNullOrWhiteSpace(typed)
+            ? string.Empty
+            : Slug.Create(typed, Options).TrimStart(Separator);
 
     /// <summary>
     /// Whether a typed name can be used as a hero prefix or class name.
