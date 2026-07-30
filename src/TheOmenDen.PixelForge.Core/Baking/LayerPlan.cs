@@ -47,6 +47,28 @@ public static class LayerPlan
     private const string FullSuffix = "_full";
 
     /// <summary>
+    /// The hero a sheet belongs to, read back out of its directory.
+    /// </summary>
+    /// <param name="directory">A recipe's <see cref="SheetRecipe.Directory"/>.</param>
+    /// <returns>
+    /// The hero's label, or nothing for an attachment — which belongs to no hero and is shared by
+    /// all of them.
+    /// </returns>
+    /// <remarks>
+    /// Here rather than as a field on <see cref="SheetRecipe"/> because this type owns the
+    /// convention at both ends: it writes <c>heroes/&lt;label&gt;</c> and it reads it back. A third
+    /// placement property on the recipe could disagree with the directory it sits beside.
+    /// </remarks>
+    public static Optional<string> HeroOf(string directory)
+    {
+        const string Prefix = HeroesFolder + "/";
+
+        return directory is not null && directory.StartsWith(Prefix, StringComparison.Ordinal)
+            ? directory[Prefix.Length..]
+            : Optional<string>.None;
+    }
+
+    /// <summary>
     /// The distinct bodies a selection describes, so a caller can resolve their labels before
     /// planning.
     /// </summary>

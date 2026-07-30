@@ -38,7 +38,7 @@ public sealed class RunArtifactsTests
 
         var failures = await RunArtifacts.WriteAllAsync(
             root.FullPath,
-            BatchManifest.NewRunId(),
+            new LayerRun { RunId = BatchManifest.NewRunId() },
             [Recipe("body-01", SheetGeometry.Curated)],
             TestContext.Current.CancellationToken);
 
@@ -54,7 +54,7 @@ public sealed class RunArtifactsTests
 
         var failures = await RunArtifacts.WriteAllAsync(
             root.FullPath,
-            BatchManifest.NewRunId(),
+            new LayerRun { RunId = BatchManifest.NewRunId() },
             [Recipe("raw-01", SheetGeometry.Full)],
             TestContext.Current.CancellationToken);
 
@@ -71,7 +71,7 @@ public sealed class RunArtifactsTests
 
         var failures = await RunArtifacts.WriteAllAsync(
             root.FullPath,
-            BatchManifest.NewRunId(),
+            new LayerRun { RunId = BatchManifest.NewRunId() },
             [Recipe("body-01", SheetGeometry.Curated), Recipe("raw-01", SheetGeometry.Full)],
             TestContext.Current.CancellationToken);
 
@@ -94,7 +94,7 @@ public sealed class RunArtifactsTests
 
         var runId = BatchManifest.NewRunId();
 
-        await RunArtifacts.WriteAllAsync(root.FullPath, runId, [Recipe("body-01", SheetGeometry.Curated)], TestContext.Current.CancellationToken);
+        await RunArtifacts.WriteAllAsync(root.FullPath, new LayerRun { RunId = runId }, [Recipe("body-01", SheetGeometry.Curated)], TestContext.Current.CancellationToken);
 
         var csv = await File.ReadAllTextAsync((root.FullPath / BatchManifest.FileName).Value, TestContext.Current.CancellationToken);
         var json = await File.ReadAllTextAsync((root.FullPath / RunManifest.FileName).Value, TestContext.Current.CancellationToken);
@@ -114,7 +114,7 @@ public sealed class RunArtifactsTests
 
         var failures = await RunArtifacts.WriteAllAsync(
             root.FullPath / "absent",
-            BatchManifest.NewRunId(),
+            new LayerRun { RunId = BatchManifest.NewRunId() },
             [Recipe("body-01", SheetGeometry.Curated), Recipe("raw-01", SheetGeometry.Full)],
             TestContext.Current.CancellationToken);
 
@@ -134,7 +134,7 @@ public sealed class RunArtifactsTests
     {
         using var root = TemporaryDirectory.Create();
 
-        var failures = await RunArtifacts.WriteAllAsync(root.FullPath, BatchManifest.NewRunId(), [], TestContext.Current.CancellationToken);
+        var failures = await RunArtifacts.WriteAllAsync(root.FullPath, new LayerRun { RunId = BatchManifest.NewRunId() }, [], TestContext.Current.CancellationToken);
 
         Assert.False(Exists(root, SheetIndex.FileName));
         Assert.False(Exists(root, ClipIndex.FileName));
@@ -172,5 +172,45 @@ public sealed class RunArtifactsTests
 
         // Hair bakes as its own sheet with no body under it — one layer, not a composite.
         Assert.All(all.AsSpan()[7..].ToArray(), r => Assert.Single(r.Layers));
+    }
+
+    /// <summary>
+    /// The registry is written only when the run has heroes. A curated-only export has none, and
+    /// must not leave an empty one that the next run would read back as authoritative.
+    /// </summary>
+    [Fact]
+    public async Task WriteAll_WritesNoRegistry_WhenTheRunHasNoHeroes()
+    {
+        using var root = TemporaryDirectory.Create();
+
+        await RunArtifacts.WriteAllAsync(
+            root.FullPath,
+            new LayerRun { RunId = BatchManifest.NewRunId() },
+            [Recipe("body-01", SheetGeometry.Curated)],
+            TestContext.Current.CancellationToken);
+
+        Assert.False(Exists(root, HeroRegistry.FileName));
+        Assert.False(Exists(root, LoadoutWriter.CsvFileName));
+    }
+
+    /// <summary>A run that knows heroes leaves the registry and its schema beside the manifests.</summary>
+    [Fact]
+    public async Task WriteAll_WritesTheRegistry_WhenTheRunHasHeroes()
+    {
+        using var root = TemporaryDirectory.Create();
+
+        var heroes = HeroRegistry.Assign(
+            [], [new HeroKey("bottom1", "top11", "head1")], "villager", BatchManifest.NewRunId());
+
+        var failures = await RunArtifacts.WriteAllAsync(
+            root.FullPath,
+            new LayerRun { RunId = BatchManifest.NewRunId(), Heroes = heroes },
+            [Recipe("villager_01", SheetGeometry.Curated)],
+            TestContext.Current.CancellationToken);
+
+        Assert.Empty(failures);
+        Assert.True(Exists(root, HeroRegistry.FileName));
+        Assert.True(Exists(root, HeroRegistry.CsvFileName));
+        Assert.True(Exists(root, HeroRegistry.SchemaFileName));
     }
 }

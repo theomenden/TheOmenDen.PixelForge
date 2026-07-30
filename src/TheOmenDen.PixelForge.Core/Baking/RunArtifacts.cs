@@ -28,7 +28,10 @@ public static class RunArtifacts
     /// Writes every artifact the run calls for.
     /// </summary>
     /// <param name="directory">Where the run's sheets were written.</param>
-    /// <param name="runId">Stamped into both manifests, from <see cref="BatchManifest.NewRunId"/>.</param>
+    /// <param name="run">
+    /// The run's identity, and anything a layer export adds beyond sheets — the hero registry and
+    /// the class it names. Both are optional, so a curated-only export passes the id alone.
+    /// </param>
     /// <param name="recipes">The recipes the run was given, in bake order.</param>
     /// <param name="cancellationToken">Cancels the writes.</param>
     /// <returns>
@@ -48,12 +51,14 @@ public static class RunArtifacts
     /// </remarks>
     public static async Task<ImmutableArray<ArtifactFailure>> WriteAllAsync(
         FullPath directory,
-        Guid runId,
+        LayerRun run,
         ImmutableArray<SheetRecipe> recipes,
         CancellationToken cancellationToken = default)
     {
         Guard.IsFalse(recipes.IsDefault);
+        Guard.IsNotNull(run);
 
+        var runId = run.RunId;
         var failures = ImmutableArray.CreateBuilder<ArtifactFailure>();
 
         // Written one after another rather than concurrently: four small files, and a run whose
@@ -81,6 +86,26 @@ public static class RunArtifacts
             failures,
             RunManifest.FileName,
             await RunManifest.WriteToAsync(directory, runId, recipes, cancellationToken));
+
+        // The registry is written only when the run has heroes. A curated-only export has none,
+        // and must not leave an empty one that the next run would then read back as authoritative.
+        if (!run.Heroes.IsDefaultOrEmpty)
+        {
+            Record(
+                failures,
+                HeroRegistry.FileName,
+                await HeroRegistry.WriteToAsync(directory, run.Heroes, cancellationToken));
+        }
+
+        // A class with nothing ticked is not a loadout, so it writes no document — the same rule
+        // that keeps a blank class name from producing an empty pool.
+        if (run.ClassName.Length is not 0 && run.Pool.Length is not 0 && !LoadoutWriter.IsEmpty(run.Pool))
+        {
+            Record(
+                failures,
+                run.ClassName + ".json",
+                await LoadoutWriter.WriteToAsync(directory, run.ClassName, run.Pool, runId, cancellationToken));
+        }
 
         return failures.ToImmutable();
     }

@@ -327,6 +327,13 @@ public static class RunManifest
             writer.WriteString(SheetNames.ToneUtf8, tone.Name);
         }
 
+        // Present on a hero's base sheet, absent on a standalone attachment layer — which belongs
+        // to no hero and is shared by every one of them.
+        if (LayerPlan.HeroOf(recipe.Directory).TryGet(out var hero))
+        {
+            writer.WriteString(SheetNames.HeroUtf8, hero);
+        }
+
         writer.WriteStartObject(SheetNames.SlotsValueUtf8);
 
         var stems = BatchManifest.StemsBySlot(recipe);
