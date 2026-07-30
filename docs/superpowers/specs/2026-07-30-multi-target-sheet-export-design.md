@@ -18,6 +18,11 @@ handles BMP, EXR, GIF, HDR, IFF, JPEG, PICT, PNG, PSD, TGA and TIFF; MonoGame's 
 `TextureImporter` has no WebP path either. The pipeline currently cannot write a file either
 engine can open. Both Time Elements *and* Time Fantasy output must reach them.
 
+Taken as an accepted working assumption rather than a verified one: this comes from the documented
+importer format lists, not from a trial against the actual Unity and MonoGame projects. If either
+turns out to have a WebP path, §1 gets simpler — nothing else in this design depends on it. Corvus
+continues to receive WebP regardless.
+
 **A second source pack.** finalbossblues' Time Fantasy characters, plus the 8-directional
 diagonal addon, in a geometry unrelated to Time Elements:
 
