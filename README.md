@@ -16,6 +16,7 @@ This guide is for using the app. If you want to work on the code instead, read `
 4. [A tour of the five pages](#a-tour-of-the-five-pages)
 5. [Your first export, step by step](#your-first-export-step-by-step)
 6. [What ends up in the output folder](#what-ends-up-in-the-output-folder)
+   - Making a set of characters: [Creating heroes, step by step](docs/creating-heroes.md)
 7. [How to read a finished sheet](#how-to-read-a-finished-sheet)
 8. [The two Roost buttons](#the-two-roost-buttons)
 9. [Where the app keeps your settings](#where-the-app-keeps-your-settings)
@@ -141,13 +142,26 @@ the safest pick, because files with the same name get overwritten without asking
 
 The line under the buttons explains whichever mode is selected.
 
-**3. Tick the parts you want.** Each section below the preview is one part of a character. Open one
-and tick the files you want in it. Two things are worth knowing here:
+**3. Name your characters.** The **Hero prefix** box names new character folders. A prefix of
+`villager` gives you `villager_01`, `villager_02`, and so on. It is required, and the Export button
+stays off until it holds something usable. Blank is refused, and so are `heroes`, `attachments`,
+`loadouts`, and `curated`, because the export folder already uses those names.
 
-- **Every tick multiplies.** Three tops and four hairstyles is twelve sheets, not seven. Watch the
-  file count at the bottom right as you go.
+The **Class name** box beside it is optional. It names the set of equipment you ticked, such as
+`ranger`. Leave it empty and the run still writes every layer, it just does not name the set.
+
+**4. Tick the parts you want.** Each section below the preview is one part of a character. Open one
+and tick the files you want in it. Three things are worth knowing here:
+
+- **Bodies multiply, equipment does not.** Three bottoms with one top and one head is three
+  characters. Nine hairstyles stay nine files however many characters you have, because a hairstyle
+  is drawn once and shared. Watch the label near the Export button as you go.
 - **A section left empty is skipped**, so a character can go without a hat. The exceptions are
-  bottom, top, and head, which a character always needs.
+  bottom, top, and head, which go together: fill all three, or leave all three empty for equipment
+  with no character.
+- **The Filter box brings rows into view.** Long lists do not always load every row, and the Hat and
+  Weapon sections are the most likely to be short. Typing part of a name shortens the list and the
+  row appears. Clearing the box keeps your ticks.
 
 The **Filter** box in each section shortens a long list. It only hides rows, so anything you ticked
 stays ticked when you clear it.
@@ -156,14 +170,16 @@ The **Base only** and **All colours** switch decides whether a tick also brings 
 recolors of that file. On a hairstyle with eight color variants, flipping it turns one tick into
 eight files.
 
-**4. Tick your skin tones.** More than one tone means one sheet per tone. This only affects parts
-that show skin, so hair and clothes keep the colors they were drawn in.
+**5. Tick your skin tones.** More than one tone means one sheet per character per tone. This only
+affects parts that show skin, so hair and clothes keep the colors they were drawn in, and the
+equipment count does not change.
 
-**5. Check the count.** The label near the Export button tells you how many files the run will write.
-If it says **0 files**, the Export button stays turned off, and one of the required parts has nothing
+**6. Check the count.** The label near the Export button describes the run as a sentence, like
+`2 characters x 8 skin tones + 9 equipment layers = 25 files`. If it reads **Nothing to export yet**,
+the Export button stays turned off, and usually a body has only one or two of its three parts
 ticked. Over a thousand files, the app lets you start but warns you that it will take a while.
 
-**6. Click Export.** The bar fills as sheets land, and the number beside it counts up. Each row you
+**7. Click Export.** The bar fills as sheets land, and the number beside it counts up. Each row you
 ticked gets a note showing its file size, or the reason it failed.
 
 You can leave the page or use the rest of the app while a run goes. **Cancel** stops it. Sheets
@@ -172,15 +188,32 @@ unaccounted for.
 
 ## What ends up in the output folder
 
-Alongside the sheets themselves, a run leaves a few small files that describe what it made:
+A run writes sheets into folders by what they are, and leaves small files beside them that describe
+what it made:
+
+```
+heroes/villager_01/     one character, one sheet per skin tone
+attachments/hair/       one sheet per hairstyle, shared by every character
+loadouts/ranger.json    which gear a named class offers
+```
 
 | File | What it is |
 | --- | --- |
-| `<name>.webp` | The sprite sheets. WebP saved with no quality loss, so no pixel is smudged. |
+| `heroes/<name>/*.webp` | A character's sheets. The one with no tone in its name is the tone the art was drawn in. |
+| `attachments/<part>/*.webp` | One sheet per piece of equipment, drawn once and shared. Hair, hats, and weapons live here. |
+| `loadouts/<class>.json` | Which pieces a named class offers. Written only when you name a class. |
+| `heroes.json` | Which clothes each character folder holds. A folder called `villager_01` does not say on its own, so this is the only place that is written down. Keep it. |
+| `heroes.csv` | The same list, for a spreadsheet. |
+| `classes.csv` | One row per class, listing the gear it offers. |
 | `index.csv` | Which row of a game-ready sheet holds which animation and facing. Written when the run produced game-ready sheets. |
 | `clips.csv` | The same idea for the full, untrimmed sheets. Written when the run produced those. |
 | `sheets.csv` | One row per sheet: what went into it and what tone it used. |
 | `manifest.json` | The same run described as JSON, for anything that would rather read that. |
+| `pixelforge-*.json` | The rules each of the JSON files above follows, copied in so you can check a file without this app. |
+
+Equipment is not copied into each character folder. A hairstyle looks the same on everybody, so it
+is written once and your game draws it over whichever character you like. **[Creating heroes, step
+by step](docs/creating-heroes.md)** walks through a full run and shows how a game reads the result.
 
 Every sheet is read back after it is written and compared against what was meant to be there. That
 is what "no quality loss" means here: it is checked, not assumed. A sheet that fails the check is
