@@ -43,7 +43,7 @@ namespace TheOmenDen.PixelForge.Core.Baking;
 /// </summary>
 public static class BatchBaker
 {
-    public static async Task<BatchSummary> RunAsync(
+    public static async Task<Result<BatchSummary, BakeFailure>> RunAsync(
         ImmutableArray<SheetRecipe> recipes,
         FullPath outputDirectory,
         IProgress<BakeProgress>? progress,
@@ -56,6 +56,11 @@ public static class BatchBaker
         {
             // An empty run is an empty fold, so it needs no separate zero literal to drift.
             return Summarize([], cancelled: false);
+        }
+
+        if (Prepare(outputDirectory, recipes).TryGet(out var unusable))
+        {
+            return new(unusable);
         }
 
         var total = recipes.Length;
@@ -104,6 +109,64 @@ public static class BatchBaker
         }
 
         return Summarize(outcomes, cancelled);
+    }
+
+    /// <summary>
+    /// Creates every directory the run will write into, before any of it is baked.
+    /// </summary>
+    /// <returns>
+    /// <see cref="BakeFailure.OutputDirectoryCreateFailed"/> for the first destination that cannot
+    /// be created, or nothing when they all can.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Single-threaded and up front, rather than on demand inside each worker.
+    /// <c>Directory.CreateDirectory</c> is idempotent and safe to call concurrently, so the racy
+    /// version would also work — but a root that cannot be written into is a property of the run,
+    /// not of a sheet, and failing once before any decode beats failing per recipe after all of
+    /// them. It also means <see cref="SheetWriter"/> keeps its existing contract: it reports a
+    /// missing directory, it does not create one.
+    /// </para>
+    /// <para>
+    /// Deduplicated on the recipe's relative directory with <see cref="StringComparer.Ordinal"/>.
+    /// A case-insensitive comparer would be defensible on Windows, but every directory here is
+    /// generated lowercase, and the cost of being wrong is one redundant idempotent call.
+    /// </para>
+    /// </remarks>
+    private static Optional<BakeFailure> Prepare(FullPath root, ImmutableArray<SheetRecipe> recipes)
+    {
+        // The root is the folder the user picked, not one to invent. If it has been moved or
+        // deleted since, recreating it would quietly scatter the run into a stale location — so a
+        // missing root stays a failure, and only the subdirectories beneath it are created.
+        if (!Directory.Exists(root.Value))
+        {
+            return BakeFailure.OutputDirectoryUnavailable;
+        }
+
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var recipe in recipes)
+        {
+            if (recipe.Directory.Length is 0 || !seen.Add(recipe.Directory))
+            {
+                continue;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(Destination(root, recipe).Value);
+            }
+            catch (Exception exception) when (exception is IOException
+                or UnauthorizedAccessException
+                or ArgumentException
+                or NotSupportedException
+                or PathTooLongException)
+            {
+                return BakeFailure.OutputDirectoryCreateFailed;
+            }
+        }
+
+        return Optional<BakeFailure>.None;
     }
 
     /// <summary>

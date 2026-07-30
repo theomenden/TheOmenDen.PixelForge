@@ -80,6 +80,24 @@ public sealed class BatchBakerTests : IDisposable
         return output;
     }
 
+    /// <summary>
+    /// Runs and unwraps, for the tests whose subject is the summary rather than the run's ability
+    /// to start. Directory creation failing is its own test.
+    /// </summary>
+    private static async Task<BatchSummary> SucceedsAsync(
+        ImmutableArray<SheetRecipe> recipes,
+        FullPath output,
+        IProgress<BakeProgress>? progress,
+        int maxParallelism,
+        CancellationToken cancellationToken)
+    {
+        var run = await BatchBaker.RunAsync(recipes, output, progress, maxParallelism, cancellationToken);
+
+        Assert.True(run.IsSuccessful);
+
+        return run.Value;
+    }
+
     private ImmutableArray<SheetRecipe> GoodRecipes(int count)
     {
         var layer = WritePartial("layer.png");
@@ -98,7 +116,7 @@ public sealed class BatchBakerTests : IDisposable
     {
         var output = OutputDirectory();
 
-        var summary = await BatchBaker.RunAsync(
+        var summary = await SucceedsAsync(
             GoodRecipes(3), output, null, 2, TestContext.Current.CancellationToken);
 
         Assert.Equal(3, summary.Succeeded);
@@ -108,21 +126,18 @@ public sealed class BatchBakerTests : IDisposable
     }
 
     /// <summary>
-    /// A recipe's <see cref="SheetRecipe.Directory"/> decides where its sheet lands, which is what
-    /// lets one run write heroes, attachments and the deliverable to three different places.
+    /// Nested destinations are created by the run itself, so nothing has to exist beforehand —
+    /// which is what lets one run write heroes, attachments and the deliverable to three places.
     /// </summary>
     /// <remarks>
     /// The forward slashes in the recipe are deliberate — <c>FullPath</c> normalises them onto the
     /// platform separator, so the same string can be written verbatim into the manifests.
     /// </remarks>
     [Fact]
-    public async Task RunAsync_WritesEachSheetIntoItsOwnDirectory()
+    public async Task RunAsync_CreatesEachDestination_AndWritesTheSheetIntoIt()
     {
         var output = OutputDirectory();
         var layer = WritePartial("layer.png");
-
-        Directory.CreateDirectory((output / "heroes/villager_01").Value);
-        Directory.CreateDirectory((output / "attachments/hair").Value);
 
         ImmutableArray<SheetRecipe> recipes =
         [
@@ -130,7 +145,7 @@ public sealed class BatchBakerTests : IDisposable
             new() { Name = "hair1", Layers = [new(layer, IsSkin: false)], Directory = "attachments/hair" },
         ];
 
-        var summary = await BatchBaker.RunAsync(recipes, output, null, 2, TestContext.Current.CancellationToken);
+        var summary = await SucceedsAsync(recipes, output, null, 2, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, summary.Succeeded);
         Assert.True(File.Exists((output / "heroes/villager_01/villager_01.webp").Value));
@@ -139,29 +154,32 @@ public sealed class BatchBakerTests : IDisposable
     }
 
     /// <summary>
-    /// Nothing creates the directory yet, so a recipe pointing at one that is not there fails
-    /// rather than writing to the root.
+    /// A destination that cannot be created aborts the run as a returned value, before anything is
+    /// decoded — not once per recipe after all of them.
     /// </summary>
     /// <remarks>
-    /// This is the gap directory pre-creation closes. It is asserted rather than left implicit
-    /// because the failure mode without it — sheets silently landing somewhere else — would be
-    /// far harder to spot than a returned <see cref="BakeFailure.OutputDirectoryUnavailable"/>.
+    /// A file standing where the directory should go is the portable way to make
+    /// <c>Directory.CreateDirectory</c> fail without touching permissions.
     /// </remarks>
     [Fact]
-    public async Task RunAsync_FailsARecipe_WhenItsDirectoryDoesNotExist()
+    public async Task RunAsync_ReturnsAFailure_WhenADestinationCannotBeCreated()
     {
         var output = OutputDirectory();
         var layer = WritePartial("layer.png");
+
+        // "heroes" is now a file, so creating "heroes/villager_01" beneath it cannot succeed.
+        await File.WriteAllTextAsync(
+            (output / "heroes").Value, "in the way", TestContext.Current.CancellationToken);
 
         ImmutableArray<SheetRecipe> recipes =
         [
             new() { Name = "villager_01", Layers = [new(layer, IsSkin: false)], Directory = "heroes/villager_01" },
         ];
 
-        var summary = await BatchBaker.RunAsync(recipes, output, null, 1, TestContext.Current.CancellationToken);
+        var run = await BatchBaker.RunAsync(recipes, output, null, 1, TestContext.Current.CancellationToken);
 
-        Assert.Equal(0, summary.Succeeded);
-        Assert.Equal(1, summary.Failed);
+        Assert.False(run.IsSuccessful);
+        Assert.Equal(BakeFailure.OutputDirectoryCreateFailed, run.Error);
         Assert.Empty(Directory.GetFiles(output.Value, "*.webp"));
     }
 
@@ -171,7 +189,7 @@ public sealed class BatchBakerTests : IDisposable
         var output = OutputDirectory();
         var progress = new CollectingProgress();
 
-        var summary = await BatchBaker.RunAsync(
+        var summary = await SucceedsAsync(
             GoodRecipes(4), output, progress, 2, TestContext.Current.CancellationToken);
 
         Assert.Equal(4, summary.Succeeded);
@@ -197,7 +215,7 @@ public sealed class BatchBakerTests : IDisposable
             Layers = [new(_directory.FullPath / "absent.png", IsSkin: false)],
         });
 
-        var summary = await BatchBaker.RunAsync(
+        var summary = await SucceedsAsync(
             recipes, output, null, 2, TestContext.Current.CancellationToken);
 
         Assert.Equal(2, summary.Succeeded);
@@ -217,7 +235,7 @@ public sealed class BatchBakerTests : IDisposable
             Layers = [new(_directory.FullPath / "absent.png", IsSkin: false)],
         });
 
-        await BatchBaker.RunAsync(recipes, output, progress, 1, TestContext.Current.CancellationToken);
+        await SucceedsAsync(recipes, output, progress, 1, TestContext.Current.CancellationToken);
 
         var report = Assert.Single(progress.Reports);
 
@@ -236,7 +254,7 @@ public sealed class BatchBakerTests : IDisposable
 
         await cts.CancelAsync();
 
-        var summary = await BatchBaker.RunAsync(GoodRecipes(4), output, null, 2, cts.Token);
+        var summary = await SucceedsAsync(GoodRecipes(4), output, null, 2, cts.Token);
 
         Assert.True(summary.Cancelled);
     }
@@ -260,7 +278,7 @@ public sealed class BatchBakerTests : IDisposable
 
         // DOP 1 makes this deterministic: nothing else can be in flight when the token is
         // observed, so exactly cancelAfter recipes finish before the run stops.
-        var summary = await BatchBaker.RunAsync(GoodRecipes(total), output, progress, 1, cts.Token);
+        var summary = await SucceedsAsync(GoodRecipes(total), output, progress, 1, cts.Token);
 
         Assert.True(summary.Cancelled);
         Assert.True(summary.Succeeded >= cancelAfter,
@@ -268,16 +286,27 @@ public sealed class BatchBakerTests : IDisposable
         Assert.True(Directory.GetFiles(output.Value, "*.webp").Length >= cancelAfter);
     }
 
+    /// <summary>
+    /// A missing export root stops the run once, rather than failing every recipe with the same
+    /// cause.
+    /// </summary>
+    /// <remarks>
+    /// The root is deliberately <em>not</em> created. It is the folder the user picked; if it has
+    /// been moved or deleted since, inventing it again would scatter the run somewhere stale and
+    /// look like success. Subdirectories beneath it are a different matter — those are ours, and
+    /// the run creates them.
+    /// </remarks>
     [Fact]
-    public async Task RunAsync_FailsEveryRecipe_WhenTheOutputDirectoryIsMissing()
+    public async Task RunAsync_ReturnsAFailure_WhenTheOutputRootIsMissing()
     {
         var missing = _directory.FullPath / "no-such-dir";
 
-        var summary = await BatchBaker.RunAsync(
+        var run = await BatchBaker.RunAsync(
             GoodRecipes(3), missing, null, 2, TestContext.Current.CancellationToken);
 
-        Assert.Equal(0, summary.Succeeded);
-        Assert.Equal(3, summary.Failed);
+        Assert.False(run.IsSuccessful);
+        Assert.Equal(BakeFailure.OutputDirectoryUnavailable, run.Error);
+        Assert.False(Directory.Exists(missing.Value));
     }
 
     [Fact]
@@ -285,7 +314,7 @@ public sealed class BatchBakerTests : IDisposable
     {
         var output = OutputDirectory();
 
-        var summary = await BatchBaker.RunAsync(
+        var summary = await SucceedsAsync(
             GoodRecipes(3), output, null, 2, TestContext.Current.CancellationToken);
 
         var onDisk = Directory.GetFiles(output.Value, "*.webp").Sum(static f => new FileInfo(f).Length);
@@ -296,7 +325,7 @@ public sealed class BatchBakerTests : IDisposable
     [Fact]
     public async Task RunAsync_ReturnsAnEmptySummary_WhenGivenNoRecipes()
     {
-        var summary = await BatchBaker.RunAsync(
+        var summary = await SucceedsAsync(
             [], OutputDirectory(), null, 2, TestContext.Current.CancellationToken);
 
         Assert.Equal(0, summary.Succeeded);
@@ -337,7 +366,7 @@ public sealed class BatchBakerTests : IDisposable
             recipes.Add(new() { Name = $"sheet-{i:00}", Layers = layers.ToImmutable() });
         }
 
-        var summary = await BatchBaker.RunAsync(
+        var summary = await SucceedsAsync(
             recipes.ToImmutable(), output, progress, 1, TestContext.Current.CancellationToken);
 
         Assert.Equal(count, summary.Succeeded);

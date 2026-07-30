@@ -48,6 +48,17 @@ public enum BakeFailure
     /// <summary>The output directory does not exist, or is not reachable.</summary>
     OutputDirectoryUnavailable,
 
+    /// <summary>
+    /// A destination directory the run needs could not be created.
+    /// <para>
+    /// Distinct from <see cref="OutputDirectoryUnavailable"/>, which is one recipe finding its
+    /// folder missing. This one aborts the whole run before any decode happens: a root that cannot
+    /// be written into is not a property of one sheet, and discovering it forty-three times would
+    /// bury the cause under its own symptoms.
+    /// </para>
+    /// </summary>
+    OutputDirectoryCreateFailed,
+
     /// <summary>The sheet encoded, but the file could not be written.</summary>
     OutputWriteFailed,
 

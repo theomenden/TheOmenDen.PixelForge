@@ -321,12 +321,25 @@ public sealed partial class BatchExportViewModel : ObservableObject
 
         try
         {
-            var summary = await BatchBaker.RunAsync(
+            var run = await BatchBaker.RunAsync(
                 recipes,
                 output,
                 progress,
                 Environment.ProcessorCount,
                 cancellationToken);
+
+            // A run that could not lay out its folders wrote nothing, so there are no manifests to
+            // write either — reporting the cause and stopping is the whole of the handling.
+            if (!run.TryGet(out var summary))
+            {
+                Notify(
+                    run.Error is BakeFailure.OutputDirectoryUnavailable
+                        ? "That output folder is not there any more. Pick it again in Settings."
+                        : "Could not create the export folders. Check the output folder is writable.",
+                    StatusLevel.Error);
+
+                return;
+            }
 
             Report(summary);
 
