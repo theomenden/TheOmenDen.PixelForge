@@ -48,9 +48,18 @@ public static class SheetBaker
     /// the generator's <c>CharacterLayers</c> ordering (shadow, bottom, top, head).
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The layers are borrowed, not owned — every one has to be alive for the whole call, so this
+    /// is the form that peaks at the entire stack. The bake path does not use it:
+    /// <see cref="RecipeBaker.AssembleLayers"/> drives a <see cref="LayerComposite"/> directly so
+    /// it can dispose each layer as soon as it has been drawn. This overload remains for callers
+    /// that already hold decoded bitmaps and want to keep them.
+    /// </para>
+    /// <para>
     /// Compositing happens on a premultiplied surface because that is what Skia draws into,
     /// then converts to the unpremultiplied canonical format. The source art is strictly binary
     /// alpha, so that round trip is exact rather than merely close.
+    /// </para>
     /// </remarks>
     public static Result<SKBitmap, BakeFailure> Assemble(IReadOnlyList<SKBitmap> layers)
     {
@@ -69,20 +78,14 @@ public static class SheetBaker
             }
         }
 
-        using var composited = new SKBitmap(
-            new SKImageInfo(SheetLayout.SourceWidth, SheetLayout.SourceHeight, SKColorType.Rgba8888, SKAlphaType.Premul));
+        using var composite = new LayerComposite();
 
-        using (var canvas = new SKCanvas(composited))
+        foreach (var layer in layers)
         {
-            canvas.Clear(SKColors.Transparent);
-
-            foreach (var layer in layers)
-            {
-                canvas.DrawBitmap(layer, 0, 0, PixelExact);
-            }
+            composite.Draw(layer);
         }
 
-        return ToCanonical(composited);
+        return composite.Flatten();
     }
 
     /// <summary>

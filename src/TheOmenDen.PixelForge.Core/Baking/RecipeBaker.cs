@@ -64,6 +64,12 @@ public static class RecipeBaker
     /// draws beneath the body.
     /// </para>
     /// <para>
+    /// Layers stream through a <see cref="LayerComposite"/> — decoded, drawn, then disposed —
+    /// rather than being decoded into a list and composited at the end. At 828 KiB per canonical
+    /// source partial the batched form peaked at <c>layers x 828 KiB</c> per worker, which a
+    /// ten-slot stack on a many-core batch run turns into hundreds of megabytes of live bitmaps.
+    /// </para>
+    /// <para>
     /// Exposed for the composite preview, which needs the assembly but neither a curate nor an
     /// encode. Sharing it keeps the decode-and-validate loop in one place.
     /// </para>
@@ -84,31 +90,28 @@ public static class RecipeBaker
             : default;
 
         var hasTone = recipe.Tone.HasValue;
-        var prepared = new List<SKBitmap>(recipe.Layers.Length);
 
-        try
+        using var composite = new LayerComposite();
+
+        foreach (var layer in recipe.Layers)
         {
-            foreach (var layer in recipe.Layers)
+            var canonical = Prepare(layer, substitution, hasTone);
+
+            if (!canonical.TryGet(out var ready))
             {
-                var canonical = Prepare(layer, substitution, hasTone);
-
-                if (!canonical.TryGet(out var ready))
-                {
-                    return new(canonical.Error);
-                }
-
-                prepared.Add(ready);
+                return new(canonical.Error);
             }
 
-            return SheetBaker.Assemble(prepared);
-        }
-        finally
-        {
-            foreach (var layer in prepared)
+            // Drawn and released before the next one is decoded, so the peak is one layer rather
+            // than the whole stack. Prepare has already checked the geometry, which is the only
+            // thing the batched form validated up front.
+            using (ready)
             {
-                layer.Dispose();
+                composite.Draw(ready);
             }
         }
+
+        return composite.Flatten();
     }
 
     /// <summary>
