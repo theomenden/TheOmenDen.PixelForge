@@ -38,6 +38,12 @@
          with no build coupling, so the export folder has to carry its own contract. -->
     <AdditionalFiles Include="Schemas\pixelforge-manifest-v1.json" />
     <EmbeddedResource Include="Schemas\pixelforge-manifest-v1.json" />
+
+    <AdditionalFiles Include="Schemas\pixelforge-heroes-v1.json" />
+    <EmbeddedResource Include="Schemas\pixelforge-heroes-v1.json" />
+
+    <AdditionalFiles Include="Schemas\pixelforge-loadouts-v1.json" />
+    <EmbeddedResource Include="Schemas\pixelforge-loadouts-v1.json" />
   </ItemGroup>
 
 </Project>

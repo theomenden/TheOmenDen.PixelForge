@@ -12,7 +12,7 @@
     },
     "schemaVersion": {
       "type": "string",
-      "const": "1.0.0",
+      "const": "1.1.0",
       "description": "Semantic version of this manifest format, and the single place it is declared — the writer emits this constant rather than a literal of its own, so a drifted producer fails validation instead of shipping a plausible but wrong version. Policy: an optional property added at one of the open objects below is a MINOR bump. A change to one of the three closed objects (slots, curatedClip.rows, fullLayout.facingRows), or a removed, retyped or newly required property anywhere, mints a new $id, a new -vN filename and a new generated type."
     },
     "runId": {
@@ -121,7 +121,7 @@
         },
         "reverseDrawOrder": {
           "type": "boolean",
-          "description": "Whether this clip's layers composite back to front. True for climb alone."
+          "description": "Whether this clip composites in the generator's alternate layer ordering. True for climb alone. This is NOT a back-to-front reversal of the normal order, and implementing it by reversing the layer array renders the clip wrong. The normal order is shadow, backExtra, backHair, bottom, top, head, hair, frontExtra, hat, weapon; the alternate order is shadow, weapon, frontExtra, bottom, top, head, hair, backExtra, backHair, hat. The body core -- bottom, top, head, hair -- is IDENTICAL in both. Only the back/front accessory pairs swap, which is what a character seen from behind requires: what was behind comes forward."
         }
       }
     },
@@ -223,6 +223,11 @@
           "type": "string",
           "minLength": 1,
           "description": "Name of the ramp under palette.ramps this sheet's skin was substituted into. Absent when the sheet carries no skin and keeps its authored colours."
+        },
+        "hero": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The hero directory this sheet belongs to, such as villager_01. Present on a hero's base body sheet; ABSENT on a standalone attachment layer, which belongs to no hero and is shared by all of them. There is deliberately no ordering property here: a consumer stacks layers by the fixed order given in fullClip.reverseDrawOrder's description, which is constant across every curated clip and every facing, and each sheet names its own slot under slots."
         },
         "slots": { "$ref": "#/$defs/slots" }
       }

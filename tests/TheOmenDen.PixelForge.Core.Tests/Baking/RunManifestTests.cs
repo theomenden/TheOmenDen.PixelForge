@@ -249,7 +249,7 @@ public sealed class RunManifestTests
     [Fact]
     public async Task SchemaVersion_ComesFromTheSchemaItself()
     {
-        Assert.Equal("1.0.0", RunManifest.SchemaVersion);
+        Assert.Equal("1.1.0", RunManifest.SchemaVersion);
         Assert.Contains(
             $"\"const\": \"{RunManifest.SchemaVersion}\"",
             RunManifest.SchemaText,

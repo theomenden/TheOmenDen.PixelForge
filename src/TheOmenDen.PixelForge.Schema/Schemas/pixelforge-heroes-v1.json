@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.corvusconnection.app/pixelforge-heroes-v1.json",
+  "title": "PixelForge hero registry",
+  "description": "The heroes an export folder holds, accumulated across every run that has written into it. Unlike the run manifest, this file is CUMULATIVE and is read back by PixelForge itself before each run: it is what makes a hero directory name stable, so that anything referencing heroes/villager_01 by path keeps resolving to the same body after later runs add, remove or reorder selections. A hero's number is assigned once and never reused, even if a later run does not produce that hero. Validate against the copy of this schema shipped in the SAME folder. Objects here permit additional properties so a later minor version can add an optional field without breaking a reader; the one object that forbids them, body, says why in its own description.",
+  "type": "object",
+  "required": ["$schema", "schemaVersion", "heroes"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Relative path to the schema copied beside this file, so an editor validates it with no network access."
+    },
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Semantic version of this registry format, and the single place it is declared -- the writer emits this constant rather than a literal of its own, so a drifted producer fails validation instead of shipping a plausible but wrong version. Policy, matching the run manifest: an optional property added at one of the open objects here is a MINOR bump. A change to the closed body object, or a removed, retyped or newly required property anywhere, mints a new $id, a new -vN filename and a new generated type."
+    },
+    "heroes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/hero" },
+      "description": "Every hero this folder has ever been given, in assignment order. Entries are never removed: a number that has been handed out stays reserved so a path can never come to mean a different body."
+    }
+  },
+  "$defs": {
+    "hero": {
+      "type": "object",
+      "required": ["name", "prefix", "number", "body", "assignedInRun"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The hero's directory name under heroes/, such as villager_01. Always prefix, an underscore, and number formatted to at least two digits."
+        },
+        "prefix": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The slugged archetype the user typed, such as villager. Numbering runs per prefix, so each prefix starts at 1 and its heroes sort adjacently in a flat listing."
+        },
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "The number within this prefix. Stored as an integer alongside name rather than only inside it, so resolving the next free number never has to parse villager_01 back into parts -- a parse that a prefix containing a digit or an underscore makes ambiguous. Widens past 99 naturally: the hundredth villager is villager_100."
+        },
+        "body": { "$ref": "#/$defs/body" },
+        "assignedInRun": {
+          "type": "string",
+          "format": "uuid",
+          "description": "The run that FIRST minted this number, not the last run that produced the hero. A reader that treats this as recency will think heroes vanish between runs."
+        }
+      }
+    },
+    "body": {
+      "type": "object",
+      "required": ["bottom", "top", "head"],
+      "additionalProperties": false,
+      "description": "The three required partials that make this hero a distinct body, by stem. This trio IS the hero's identity -- it is what a later run matches against to recover the assigned number, so tone is deliberately absent: tone is a filename suffix on the baked sheets, not part of who the hero is. Closed to extra properties: these three are the complete set of slots the generator marks non-optional, so an unrecognised key is a misspelled slot rather than a newer field.",
+      "properties": {
+        "bottom": { "type": "string", "minLength": 1 },
+        "top": { "type": "string", "minLength": 1 },
+        "head": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

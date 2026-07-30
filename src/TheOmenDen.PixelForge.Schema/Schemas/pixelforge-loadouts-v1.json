@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.corvusconnection.app/pixelforge-loadouts-v1.json",
+  "title": "PixelForge loadout",
+  "description": "One named equipment pool -- a class. A loadout names WHICH attachment layers a class offers per slot; it holds no pixels and references no hero, because an attachment layer is tone-independent and stacks onto any body. That is why loadouts live once at the export root rather than once per hero. A slot may offer several stems: this is a pool a consumer picks from per character, not a fixed kit. The sheets themselves live under attachments/<slot>/<stem>.webp and are described by the run manifest. Validate against the copy of this schema shipped in the SAME folder.",
+  "type": "object",
+  "required": ["$schema", "schemaVersion", "class", "slots", "assignedInRun"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Relative path to the schema copied beside this file. Loadouts sit one directory down, so this is normally ../pixelforge-loadouts-v1.json."
+    },
+    "schemaVersion": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Semantic version of this loadout format, and the single place it is declared. Policy matches the run manifest: an optional property added at an open object is a MINOR bump; a change to the closed slots object, or a removed, retyped or newly required property, mints a new $id, a new -vN filename and a new generated type."
+    },
+    "class": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The slugged class name the user typed, such as ranger. Matches this file's own name and its row in classes.csv."
+    },
+    "slots": { "$ref": "#/$defs/slots" },
+    "assignedInRun": {
+      "type": "string",
+      "format": "uuid",
+      "description": "The run that last wrote this loadout. Loadouts are keyed by name and rewritten whole, so unlike a hero number this IS recency."
+    }
+  },
+  "$defs": {
+    "stems": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 },
+      "description": "The attachment stems this class offers for one slot, such as hair1 and hair7. Each names a file at attachments/<slot>/<stem>.webp. More than one means the class offers a choice, not that it wears several at once -- a slot draws at most one layer."
+    },
+    "slots": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Equipment by slot. A slot this class does not use is ABSENT rather than an empty array. Closed to extra properties, and deliberately narrower than the run manifest's slots object: bottom, top and head are the body -- they make a hero, not a loadout -- so only the seven optional slots appear here. Property spellings match the run manifest's slots object so one reader serves both.",
+      "properties": {
+        "shadow": { "$ref": "#/$defs/stems" },
+        "backExtra": { "$ref": "#/$defs/stems" },
+        "backHair": { "$ref": "#/$defs/stems" },
+        "hair": { "$ref": "#/$defs/stems" },
+        "frontExtra": { "$ref": "#/$defs/stems" },
+        "hat": { "$ref": "#/$defs/stems" },
+        "weapon": { "$ref": "#/$defs/stems" }
+      }
+    }
+  }
+}
