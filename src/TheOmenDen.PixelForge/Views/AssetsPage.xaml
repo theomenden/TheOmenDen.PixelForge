@@ -4,11 +4,25 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:TheOmenDen.PixelForge.Views"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:sheets="using:TheOmenDen.PixelForge.Core.Spritesheets"
+    xmlns:vm="using:TheOmenDen.PixelForge.ViewModels"
     mc:Ignorable="d">
+
+    <Page.Resources>
+        <!--
+            One shared ThemeShadow for every tile. Declared once rather than per template: a
+            GridView realizes dozens of these, and a shadow instance apiece is dozens of composition
+            objects for one visual effect.
+        -->
+        <ThemeShadow x:Key="TileShadow" />
+    </Page.Resources>
 
     <Grid Padding="24" RowSpacing="16">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
@@ -16,21 +30,291 @@
         <StackPanel Spacing="4">
             <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="Assets" />
             <TextBlock
+                AutomationProperties.AutomationId="AssetsSubtitle"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Text="Sprite sheets, palettes, and imported source images." />
+                Text="{x:Bind local:AssetsPage.CatalogueLabel(ViewModel.TotalCount), Mode=OneWay}" />
         </StackPanel>
 
-        <Border
+        <InfoBar
             Grid.Row="1"
-            Background="{ThemeResource ToolPanelBackgroundBrush}"
-            BorderBrush="{ThemeResource ToolPanelBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="{StaticResource OverlayCornerRadius}">
-            <TextBlock
-                HorizontalAlignment="Center"
-                VerticalAlignment="Center"
-                Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                Text="No assets imported yet." />
-        </Border>
+            AutomationProperties.AutomationId="AssetsPacksMissingInfoBar"
+            IsClosable="False"
+            IsOpen="{x:Bind ViewModel.PacksMissing, Mode=OneWay}"
+            Message="Source pack folders are not configured. Set all three in Settings to browse the library."
+            Severity="Warning">
+            <InfoBar.ActionButton>
+                <Button
+                    AutomationProperties.AutomationId="BtnAssetsGoToSettings"
+                    Click="OnGoToSettings"
+                    Content="Open Settings" />
+            </InfoBar.ActionButton>
+        </InfoBar>
+
+        <!--
+            Slot is the axis the art is authored on, so it is the axis the browser is grouped by.
+            Selection goes through the view model's Select rather than a TwoWay binding: the first
+            component is AssetSlot.Shadow, which is 0 and therefore also default(AssetSlot), so a
+            binding that only reacts to a *change* never fired for it.
+        -->
+        <ComboBox
+            Grid.Row="2"
+            MinWidth="260"
+            AutomationProperties.AutomationId="AssetSlotSelector"
+            AutomationProperties.Name="Asset component"
+            Header="Component"
+            ItemsSource="{x:Bind ViewModel.Slots, Mode=OneWay}"
+            SelectedIndex="0"
+            SelectionChanged="OnComponentSelected">
+            <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:SlotOption">
+                    <Grid ColumnSpacing="12" Padding="0,4">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon
+                            VerticalAlignment="Center"
+                            FontSize="16"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Glyph="{x:Bind Glyph}" />
+                        <TextBlock
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            Text="{x:Bind Name}" />
+                        <!--
+                            InfoBadge rather than a bare number: it carries its own accessible
+                            foreground-on-fill pairing, so the count keeps its contrast in every
+                            theme without this page choosing colours for it.
+                        -->
+                        <InfoBadge
+                            Grid.Column="2"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="{x:Bind CountLabel}"
+                            Style="{StaticResource InformationalValueInfoBadgeStyle}"
+                            Value="{x:Bind Count}" />
+                    </Grid>
+                </DataTemplate>
+            </ComboBox.ItemTemplate>
+        </ComboBox>
+
+        <Grid Grid.Row="3" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="260" />
+            </Grid.ColumnDefinitions>
+
+            <!--
+                Tiles carry their own bound Source rather than having one pushed into their
+                container. Reaching into containers via ContainerContentChanging was the first
+                attempt and left many tiles permanently blank: the template is not always realized
+                when it fires, and it never fires again for a tile already realized.
+            -->
+            <GridView
+                x:Name="AssetGrid"
+                AutomationProperties.AutomationId="AssetGrid"
+                AutomationProperties.Name="Asset thumbnails"
+                ItemsSource="{x:Bind Gallery.Tiles, Mode=OneWay}"
+                SelectionChanged="OnTileSelected"
+                SelectionMode="Single">
+                <GridView.ItemTemplate>
+                    <DataTemplate x:DataType="local:AssetTile">
+                        <!--
+                            Padding leaves room for the shell's shadow. Without it the projection
+                            is clipped by the item's own bounds and reads as a hard edge.
+                        -->
+                        <StackPanel
+                            Width="80"
+                            Padding="8"
+                            HorizontalAlignment="Center"
+                            AutomationProperties.AutomationId="{x:Bind AutomationId}"
+                            Spacing="4">
+                            <!--
+                                Fixed 48x48 with Stretch="None": the source cell is 48x48 and must
+                                not be resampled, or the pixel art this exists to show is blurred.
+
+                                ThemeShadow rather than the toolkit's AttachedCardShadow — it is
+                                built in, so it costs no new package, and it follows the theme.
+                                Translation's Z is what gives it a height to cast from; a shadow
+                                with no Z renders nothing at all.
+                            -->
+                            <Border
+                                Width="48"
+                                Height="48"
+                                HorizontalAlignment="Center"
+                                Background="{ThemeResource ToolPanelBackgroundBrush}"
+                                BorderBrush="{ThemeResource SurfaceStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="{StaticResource ControlCornerRadius}"
+                                Shadow="{StaticResource TileShadow}"
+                                Translation="0,0,16">
+                                <Image Source="{x:Bind Thumbnail, Mode=OneWay}" Stretch="None" />
+                            </Border>
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                MaxLines="1"
+                                Style="{StaticResource CaptionTextBlockStyle}"
+                                Text="{x:Bind Name}"
+                                TextTrimming="CharacterEllipsis"
+                                ToolTipService.ToolTip="{x:Bind FileName}" />
+                        </StackPanel>
+                    </DataTemplate>
+                </GridView.ItemTemplate>
+            </GridView>
+
+            <StackPanel Grid.Column="1" Spacing="12">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <FontIcon
+                        VerticalAlignment="Center"
+                        FontSize="16"
+                        Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                        Glyph="&#xE768;" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        Style="{StaticResource BodyStrongTextBlockStyle}"
+                        Text="Animation" />
+                </StackPanel>
+
+                <!--
+                    Accented and raised, so the preview reads as the focus of the panel rather than
+                    as another field. Translation's Z is what the shadow casts from.
+                -->
+                <Border
+                    Height="200"
+                    Background="{ThemeResource ToolPanelBackgroundBrush}"
+                    BorderBrush="{ThemeResource AccentControlElevationBorderBrush}"
+                    BorderThickness="1"
+                    CornerRadius="{StaticResource OverlayCornerRadius}"
+                    Shadow="{StaticResource TileShadow}"
+                    Translation="0,0,24">
+                    <Grid>
+                        <Image
+                            x:Name="AnimationImage"
+                            AutomationProperties.AutomationId="AnimationPreviewImage"
+                            AutomationProperties.Name="Animation preview"
+                            Stretch="None" />
+                        <TextBlock
+                            x:Name="AnimationHint"
+                            Margin="12"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="AnimationPreviewHint"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                            Style="{StaticResource CaptionTextBlockStyle}"
+                            TextAlignment="Center"
+                            TextWrapping="Wrap" />
+                    </Grid>
+                </Border>
+
+                <!--  Length, cadence and draw order — facts the picker otherwise hides.  -->
+                <TextBlock
+                    AutomationProperties.AutomationId="ClipSummary"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind local:AssetsPage.ClipSummary(ViewModel.SelectedClip), Mode=OneWay}"
+                    TextWrapping="Wrap" />
+
+                <ComboBox
+                    MinWidth="240"
+                    AutomationProperties.AutomationId="AnimationClipSelector"
+                    AutomationProperties.Name="Animation clip"
+                    Header="Clip"
+                    ItemsSource="{x:Bind ViewModel.Clips, Mode=OneWay}"
+                    SelectedItem="{x:Bind ViewModel.SelectedClip, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="sheets:GeneratorClip">
+                            <Grid Padding="0,4" ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <!--  Play for an animation, pause for a single-frame pose.  -->
+                                <FontIcon
+                                    VerticalAlignment="Center"
+                                    FontSize="14"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                    Glyph="{x:Bind local:AssetsPage.ClipGlyph(IsRenderedByDefault)}" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    Text="{x:Bind Name}" />
+                                <InfoBadge
+                                    Grid.Column="2"
+                                    VerticalAlignment="Center"
+                                    AutomationProperties.Name="{x:Bind local:AssetsPage.FrameLabel(Frames)}"
+                                    Style="{StaticResource InformationalValueInfoBadgeStyle}"
+                                    Value="{x:Bind Frames.Length}" />
+                            </Grid>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <ComboBox
+                    MinWidth="240"
+                    AutomationProperties.AutomationId="AnimationFacingSelector"
+                    AutomationProperties.Name="Facing"
+                    Header="Facing"
+                    ItemsSource="{x:Bind ViewModel.FacingOptions, Mode=OneWay}"
+                    SelectedIndex="{x:Bind ViewModel.SelectedFacing, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:FacingOption">
+                            <Grid Padding="0,4" ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <FontIcon
+                                    VerticalAlignment="Center"
+                                    FontSize="14"
+                                    Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                    Glyph="{x:Bind Glyph}" />
+                                <TextBlock
+                                    Grid.Column="1"
+                                    VerticalAlignment="Center"
+                                    Text="{x:Bind Name}" />
+                                <!--
+                                    North previews fine but never ships; say so where it is picked.
+                                    Dot, colour and words together — WCAG 1.4.1 forbids carrying the
+                                    meaning on colour alone, and a caption reading "not exported" is
+                                    what a screen reader and a monochrome display both get.
+                                -->
+                                <StackPanel
+                                    Grid.Column="2"
+                                    Orientation="Horizontal"
+                                    Spacing="6"
+                                    Visibility="{x:Bind local:AssetsPage.ShowIf(IsNotExported)}">
+                                    <InfoBadge
+                                        VerticalAlignment="Center"
+                                        Style="{StaticResource CautionDotInfoBadgeStyle}" />
+                                    <TextBlock
+                                        VerticalAlignment="Center"
+                                        Foreground="{ThemeResource SystemFillColorCautionBrush}"
+                                        Style="{StaticResource CaptionTextBlockStyle}"
+                                        Text="{x:Bind Note}" />
+                                </StackPanel>
+                            </Grid>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+
+                <ToggleSwitch
+                    AutomationProperties.AutomationId="ShowOverBodyToggle"
+                    AutomationProperties.Name="Show over base body"
+                    Header="Composite"
+                    IsOn="{x:Bind ViewModel.ShowOverBody, Mode=TwoWay}"
+                    OffContent="Partial alone"
+                    OnContent="Over base body" />
+
+                <ToggleSwitch
+                    AutomationProperties.AutomationId="AnimationPlayToggle"
+                    AutomationProperties.Name="Play animation"
+                    Header="Playback"
+                    IsOn="{x:Bind ViewModel.IsPlaying, Mode=TwoWay}"
+                    OffContent="Paused"
+                    OnContent="Playing" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Page>

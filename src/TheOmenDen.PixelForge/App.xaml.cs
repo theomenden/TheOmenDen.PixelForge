@@ -103,9 +103,12 @@ public partial class App : Application
         builder.Services.AddSingleton<CatalogService>();
         builder.Services.AddSingleton<RampService>();
         builder.Services.AddSingleton<PickerService>();
+        // Singleton so its bounded cache and decode pump outlive navigation away from the page.
+        builder.Services.AddSingleton<ThumbnailService>();
         builder.Services.AddSingleton<SettingsViewModel>();
         builder.Services.AddSingleton<PaletteViewModel>();
         builder.Services.AddSingleton<BatchExportViewModel>();
+        builder.Services.AddSingleton<AssetsViewModel>();
 
         return builder.Build();
     }
