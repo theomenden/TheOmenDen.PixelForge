@@ -327,6 +327,14 @@ C# 14 throughout — this is enforced, not advisory. `TreatWarningsAsErrors` and
   under `EnforceCodeStyleInBuild` + `TreatWarningsAsErrors` an explicit type is a build error
   (IDE0007), not a review note.
 - File-scoped namespaces. Braces always. Private fields `_camelCase`.
+- **Never more than 6 parameters** on any method or constructor — hard limit. Past that, the
+  arguments are a type that has not been named yet: group them into a `record` or a
+  `readonly record struct` (as `SheetRecipe` and `SlotSelection` already do) rather than adding a
+  seventh. Primary constructors count, and so do the source-generated ones.
+  *Not analyzer-enforced.* Nothing in the installed set (Roslynator, Meziantou, NetAnalyzers) has a
+  parameter-count rule; Sonar's `S107` does, but pulling in SonarAnalyzer.CSharp for it would add
+  several hundred other rules to a `TreatWarningsAsErrors` build. Enforce it in review. The current
+  worst case is `BatchBaker.RunAsync` at five.
 
 **Formatting: Allman braces**, enforced by `.editorconfig` with `EnforceCodeStyleInBuild`, so a
 violation is a build error rather than a review comment. Opening brace on its own line for every
