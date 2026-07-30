@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using SkiaSharp;
+using TheOmenDen.PixelForge.Core.Baking;
 using TheOmenDen.PixelForge.Core.Catalog;
 using TheOmenDen.PixelForge.Core.Palettes;
 using TheOmenDen.PixelForge.ViewModels;
@@ -58,6 +59,48 @@ public sealed partial class PipelinePage : Page
     /// </param>
     /// <returns>The count with its unit, singular for exactly one.</returns>
     public static string PlannedLabel(long count) => count is 1 ? "1 file" : $"{count} files";
+
+    /// <summary>
+    /// What the run consists of, rather than one total.
+    /// </summary>
+    /// <param name="counts">The breakdown from the view model.</param>
+    /// <returns>A sentence naming the characters, skins and equipment a run would write.</returns>
+    /// <remarks>
+    /// <para>
+    /// A static function over the whole record rather than a string on the view model, so the
+    /// formatting stays in the view and the counting stays in Core — the same split
+    /// <see cref="PlannedLabel"/> already keeps, and the reason there is no converter.
+    /// </para>
+    /// <para>
+    /// The number used to be a warning: five figures meant "you probably did not mean this". A
+    /// layer run is double digits, so it describes instead, and the breakdown is what makes the
+    /// remaining multiplier — the skin tones — visible while the user is still choosing.
+    /// </para>
+    /// </remarks>
+    public static string PlannedBreakdown(PlannedCounts counts)
+    {
+        if (counts.Sheets is 0)
+        {
+            return "Nothing to export yet";
+        }
+
+        var parts = new List<string>(2);
+
+        if (counts.Heroes > 0 && counts.Tones > 0)
+        {
+            parts.Add($"{Plural(counts.Heroes, "character")} x {Plural(counts.Tones, "skin tone")}");
+        }
+
+        if (counts.Attachments > 0)
+        {
+            parts.Add(Plural(counts.Attachments, "equipment layer"));
+        }
+
+        return $"{string.Join(" + ", parts)} = {PlannedLabel(counts.Sheets)}";
+    }
+
+    private static string Plural(long count, string noun) =>
+        count is 1 ? $"1 {noun}" : $"{count} {noun}s";
 
     /// <summary>
     /// The automation id of a per-slot control, unique across the ten groups that share the page.

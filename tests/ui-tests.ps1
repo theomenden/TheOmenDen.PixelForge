@@ -69,7 +69,7 @@ function Get-Text {
 # "644 files" -> 644, and -1 when the label holds no number at all, so a caller can tell
 # "nothing planned" apart from "the label is not a count".
 function Get-PlannedCount {
-    $text = Get-Text 'PlannedCountText'
+    $text = Get-Text 'PlannedBreakdownText'
     if ($text -notmatch '(\d+)') { return -1 }
     return [long]$Matches[1]
 }
@@ -194,7 +194,9 @@ Test-UI 'Batch export page has its controls' {
     winapp ui invoke 'NavPipeline' -a $AppPid
     Start-Sleep -Milliseconds 900
     winapp ui wait-for 'ExportModeSegmented' -a $AppPid -t 3000
-    winapp ui wait-for 'PlannedCountText' -a $AppPid -t 3000
+    winapp ui wait-for 'PlannedBreakdownText' -a $AppPid -t 3000
+    winapp ui wait-for 'HeroPrefixText' -a $AppPid -t 3000
+    winapp ui wait-for 'ClassNameText' -a $AppPid -t 3000
     winapp ui wait-for 'CompositePreviewImage' -a $AppPid -t 3000
     winapp ui wait-for 'ExportProgress' -a $AppPid -t 3000
 }
@@ -208,6 +210,58 @@ Test-UI 'Export is blocked until an output folder is chosen' {
     $enabled = winapp ui get-property 'BtnExport' --property IsEnabled -w $appWindow 2>&1
     if ([string]::IsNullOrWhiteSpace("$folder") -and "$enabled" -notmatch 'IsEnabled:\s*False') {
         throw "no output folder but Export is enabled: $enabled"
+    }
+    $global:LASTEXITCODE = 0
+}
+
+# The prefix is what new hero directories are named after, so an unusable one must not be
+# able to start a run. "heroes" is a name the export tree owns; the box refuses it rather
+# than silently suffixing, because a directory whose name differs from what was typed is
+# the kind of thing noticed three runs later.
+Test-UI 'Pipeline: a reserved hero prefix blocks the export' {
+    winapp ui invoke 'NavPipeline' -a $AppPid
+    Start-Sleep -Milliseconds 900
+
+    winapp ui set-value 'HeroPrefixText' 'heroes' -a $AppPid
+    Start-Sleep -Milliseconds 600
+    $enabled = winapp ui get-property 'BtnExport' --property IsEnabled -w $appWindow 2>&1
+    if ("$enabled" -notmatch 'IsEnabled:\s*False') {
+        throw "reserved prefix 'heroes' but Export is enabled: $enabled"
+    }
+
+    # Left set, every later test would run against a prefix that blocks export.
+    winapp ui set-value 'HeroPrefixText' 'villager' -a $AppPid | Out-Null
+    Start-Sleep -Milliseconds 500
+    $global:LASTEXITCODE = 0
+}
+
+# UpdateSourceTrigger=PropertyChanged is what makes this pass. On the default LostFocus the
+# text lands in the box and the view model never sees it, so set-value would appear to work
+# and change nothing.
+Test-UI 'Pipeline: the hero prefix commits to the view model' {
+    winapp ui set-value 'HeroPrefixText' 'noble' -a $AppPid
+    Start-Sleep -Milliseconds 600
+    $typed = Get-Text 'HeroPrefixText'
+    if ("$typed" -notmatch 'noble') { throw "hero prefix did not take the typed value: $typed" }
+
+    winapp ui set-value 'HeroPrefixText' 'villager' -a $AppPid | Out-Null
+    Start-Sleep -Milliseconds 500
+    $global:LASTEXITCODE = 0
+}
+
+# An empty class name is legal -- it means "export the layers, name no set" -- so it must
+# not block the run the way an unusable prefix does.
+Test-UI 'Pipeline: an empty class name does not block the export' {
+    winapp ui set-value 'ClassNameText' '' -a $AppPid | Out-Null
+    Start-Sleep -Milliseconds 600
+    $enabled = winapp ui get-property 'BtnExport' --property IsEnabled -w $appWindow 2>&1
+    if ("$enabled" -match 'IsEnabled:\s*False' -and (Get-PlannedCount) -gt 0) {
+        # Only a failure when something IS planned and a folder is set; otherwise the button
+        # is legitimately off for a different reason.
+        $folder = winapp ui get-value 'OutputFolderText' -w $appWindow 2>&1
+        if (-not [string]::IsNullOrWhiteSpace("$folder")) {
+            throw 'an empty class name blocked the export'
+        }
     }
     $global:LASTEXITCODE = 0
 }

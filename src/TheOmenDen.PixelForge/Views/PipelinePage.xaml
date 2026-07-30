@@ -60,6 +60,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
             <TextBox
@@ -80,8 +81,38 @@
                 Content="Browse"
                 ToolTipService.ToolTip="Pick the folder to save into. An empty folder is the safest choice." />
 
+            <!--
+                UpdateSourceTrigger is load-bearing on both boxes, exactly as it is on the slot
+                filters: the default commits on LostFocus, so UI automation set-value would write
+                the text and the view model would never see it.
+            -->
             <StackPanel
                 Grid.Row="1"
+                Grid.ColumnSpan="2"
+                Margin="0,16,0,0"
+                Orientation="Horizontal"
+                Spacing="12">
+                <TextBox
+                    Width="220"
+                    AutomationProperties.AutomationId="HeroPrefixText"
+                    AutomationProperties.Name="Hero prefix"
+                    Header="Hero prefix"
+                    PlaceholderText="villager"
+                    Text="{x:Bind ViewModel.HeroPrefix, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    ToolTipService.ToolTip="What new character folders are named after, such as villager. Each one gets a number: villager_01, villager_02. A body you have exported before keeps the number it already has, whatever you type here." />
+
+                <TextBox
+                    Width="220"
+                    AutomationProperties.AutomationId="ClassNameText"
+                    AutomationProperties.Name="Class name"
+                    Header="Class name (optional)"
+                    PlaceholderText="ranger"
+                    Text="{x:Bind ViewModel.ClassName, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                    ToolTipService.ToolTip="Names the set of equipment you have ticked, such as ranger. Leave it empty to export the character and the equipment as separate layers without naming a set." />
+            </StackPanel>
+
+            <StackPanel
+                Grid.Row="2"
                 Grid.ColumnSpan="2"
                 Margin="0,16,0,0"
                 Spacing="4">
@@ -341,10 +372,10 @@
                 <!--  What the current selection and mode would actually produce, before running it.  -->
                 <TextBlock
                     VerticalAlignment="Center"
-                    AutomationProperties.AutomationId="PlannedCountText"
+                    AutomationProperties.AutomationId="PlannedBreakdownText"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}"
                     Style="{StaticResource CaptionTextBlockStyle}"
-                    Text="{x:Bind local:PipelinePage.PlannedLabel(ViewModel.PlannedCount), Mode=OneWay}"
+                    Text="{x:Bind local:PipelinePage.PlannedBreakdown(ViewModel.PlannedCounts), Mode=OneWay}"
                     ToolTipService.ToolTip="How many files your current ticks and mode would write. Export stays off while this reads 0 files." />
                 <Button
                     AutomationProperties.AutomationId="BtnLoadRoostSelection"
