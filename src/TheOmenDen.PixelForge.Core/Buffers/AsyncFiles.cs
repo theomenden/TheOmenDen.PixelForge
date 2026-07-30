@@ -19,8 +19,14 @@ namespace TheOmenDen.PixelForge.Core.Buffers;
 /// The manifests are small, so the win is not throughput — it is that the export command and the
 /// palette editor no longer block the UI thread on the filesystem while they land.
 /// </para>
+/// <para>
+/// Public rather than internal because the app project has the same need and the same trap: pack
+/// settings are written from a dispatcher-thread command. A second copy of these
+/// <see cref="FileStreamOptions"/> over there is exactly the drift this exists to stop, so the
+/// options are stated once and both projects open files through them.
+/// </para>
 /// </remarks>
-internal static class AsyncFiles
+public static class AsyncFiles
 {
     private static readonly FileStreamOptions Read = new()
     {
@@ -36,12 +42,23 @@ internal static class AsyncFiles
         Options = FileOptions.Asynchronous,
     };
 
-    /// <summary>Opens <paramref name="path"/> for reading, truncating nothing.</summary>
-    internal static StreamReader OpenText(FullPath path) => new(path.Value, Read);
+    /// <summary>Opens <paramref name="path"/> for reading text, truncating nothing.</summary>
+    /// <param name="path">An existing file.</param>
+    /// <returns>A reader over an overlapped handle.</returns>
+    public static StreamReader OpenText(FullPath path) => new(path.Value, Read);
+
+    /// <summary>Opens <paramref name="path"/> for reading bytes, truncating nothing.</summary>
+    /// <param name="path">An existing file.</param>
+    /// <returns>A stream over an overlapped handle.</returns>
+    public static FileStream Open(FullPath path) => new(path.Value, Read);
 
     /// <summary>Creates or truncates <paramref name="path"/> for text.</summary>
-    internal static StreamWriter CreateText(FullPath path) => new(path.Value, Write);
+    /// <param name="path">The file to write. Its directory must already exist.</param>
+    /// <returns>A writer over an overlapped handle.</returns>
+    public static StreamWriter CreateText(FullPath path) => new(path.Value, Write);
 
     /// <summary>Creates or truncates <paramref name="path"/> for bytes.</summary>
-    internal static FileStream Create(FullPath path) => new(path.Value, Write);
+    /// <param name="path">The file to write. Its directory must already exist.</param>
+    /// <returns>A stream over an overlapped handle.</returns>
+    public static FileStream Create(FullPath path) => new(path.Value, Write);
 }

@@ -3,6 +3,7 @@ using DotNext;
 using Meziantou.Framework;
 using Microsoft.Extensions.Logging;
 using TheOmenDen.PixelForge.Core.Baking;
+using TheOmenDen.PixelForge.Core.Buffers;
 
 namespace TheOmenDen.PixelForge.Services;
 
@@ -61,7 +62,16 @@ public sealed class SourcePackService(ILogger<SourcePackService> logger)
         }
     }
 
-    public void Set(ElementsPack pack, FullPath path)
+    /// <summary>Points <paramref name="pack"/> at <paramref name="path"/> and persists the set.</summary>
+    /// <param name="pack">Which of the three roots to move.</param>
+    /// <param name="path">Its new directory.</param>
+    /// <param name="cancellationToken">Cancels the write.</param>
+    /// <returns>A task that completes once the settings are on disk.</returns>
+    /// <remarks>
+    /// <see cref="Changed"/> is raised after the write rather than before it, so a handler that
+    /// reads the paths back off disk cannot observe the old ones.
+    /// </remarks>
+    public async Task SetAsync(ElementsPack pack, FullPath path, CancellationToken cancellationToken = default)
     {
         switch (pack)
         {
@@ -78,11 +88,15 @@ public sealed class SourcePackService(ILogger<SourcePackService> logger)
                 return;
         }
 
-        Save();
+        await SaveAsync(cancellationToken);
+
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public void Load()
+    /// <summary>Reads the configured roots back from LocalState. A missing file is the first run.</summary>
+    /// <param name="cancellationToken">Cancels the read.</param>
+    /// <returns>A task that completes once the paths are restored, or the read has been given up on.</returns>
+    public async Task LoadAsync(CancellationToken cancellationToken = default)
     {
         var file = AppPaths.PackSettingsFile;
 
@@ -93,9 +107,12 @@ public sealed class SourcePackService(ILogger<SourcePackService> logger)
 
         try
         {
-            using var stream = File.OpenRead(file.Value);
+            await using var stream = AsyncFiles.Open(file);
 
-            var settings = JsonSerializer.Deserialize(stream, PackSettingsContext.Default.PackSettings);
+            var settings = await JsonSerializer.DeserializeAsync(
+                stream,
+                PackSettingsContext.Default.PackSettings,
+                cancellationToken);
 
             if (settings is null)
             {
@@ -115,7 +132,7 @@ public sealed class SourcePackService(ILogger<SourcePackService> logger)
         }
     }
 
-    private void Save()
+    private async Task SaveAsync(CancellationToken cancellationToken)
     {
         var file = AppPaths.PackSettingsFile;
 
@@ -123,14 +140,18 @@ public sealed class SourcePackService(ILogger<SourcePackService> logger)
         {
             Directory.CreateDirectory(AppPaths.LocalState.Value);
 
-            using var stream = File.Create(file.Value);
+            await using var stream = AsyncFiles.Create(file);
 
-            JsonSerializer.Serialize(stream, new PackSettings
-            {
-                CoreAssets = Core.TryGet(out var core) ? core.Value : null,
-                Expansion1Assets = Expansion1.TryGet(out var one) ? one.Value : null,
-                Expansion2Assets = Expansion2.TryGet(out var two) ? two.Value : null,
-            }, PackSettingsContext.Default.PackSettings);
+            await JsonSerializer.SerializeAsync(
+                stream,
+                new PackSettings
+                {
+                    CoreAssets = Core.TryGet(out var core) ? core.Value : null,
+                    Expansion1Assets = Expansion1.TryGet(out var one) ? one.Value : null,
+                    Expansion2Assets = Expansion2.TryGet(out var two) ? two.Value : null,
+                },
+                PackSettingsContext.Default.PackSettings,
+                cancellationToken);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

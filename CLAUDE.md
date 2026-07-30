@@ -334,11 +334,20 @@ blocked. Every convenience constructor picks the wrong default — `new StreamWr
 `new StreamReader(path)`, `File.Create(path)` — which is why `Buffers/AsyncFiles.cs` exists and why
 nothing else should open a file for itself.
 
-Manifest and palette writes are awaited all the way out to the caller: `RunArtifacts.WriteAllAsync`
-→ `BatchExportViewModel`, and `RampStore` → `RampService` → the palette commands. Neither runs on
-the UI thread any more. Two deliberate exceptions, both on pool threads rather than the dispatcher:
-`SheetWriter.Write` (inside `BatchBaker`'s `Parallel.ForAsync`, where the encode dominates) and
-`SourcePackService` (a three-field settings JSON).
+Every write is awaited all the way out to the caller: `RunArtifacts.WriteAllAsync` →
+`BatchExportViewModel`, `RampStore` → `RampService` → the palette commands, and
+`SourcePackService` → `SettingsViewModel`. Nothing touches the filesystem on the UI thread.
+
+`OnLaunched` cannot be `async`, so `App.StartAsync` is a discarded continuation off it — settings,
+then the catalogue they resolve, then the window, which is the order the synchronous version had.
+It is started from the UI thread, so every continuation resumes there and the `Changed` handlers
+stay on the dispatcher. It catches broadly on purpose: nothing observes a discarded task, so
+without that a failure before `Activate` would leave the process running with no window and no
+record of why.
+
+One deliberate exception: `SheetWriter.Write` stays synchronous inside `BatchBaker`'s
+`Parallel.ForAsync`, already off the dispatcher and dominated by the WebP encode.
+`RunManifest.ReadEmbeddedSchema` is not an exception — it reads an assembly resource, not a file.
 
 The Sep-specific trap: **a plain `foreach` over a `SepReader` compiles and silently reads
 synchronously.** Only `await foreach` — or `GetAsyncEnumerator(ct)` by hand, which is what

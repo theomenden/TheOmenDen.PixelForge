@@ -62,21 +62,24 @@ public sealed partial class SettingsViewModel : ObservableObject
     public bool AllPacksResolved => _packs.Resolved.HasValue;
 
     [RelayCommand]
-    private Task BrowseCorePackAsync() => BrowseAsync(ElementsPack.Core);
+    private Task BrowseCorePackAsync(CancellationToken cancellationToken) =>
+        BrowseAsync(ElementsPack.Core, cancellationToken);
 
     [RelayCommand]
-    private Task BrowseExpansion1PackAsync() => BrowseAsync(ElementsPack.CharacterExpansion1);
+    private Task BrowseExpansion1PackAsync(CancellationToken cancellationToken) =>
+        BrowseAsync(ElementsPack.CharacterExpansion1, cancellationToken);
 
     [RelayCommand]
-    private Task BrowseExpansion2PackAsync() => BrowseAsync(ElementsPack.CharacterExpansion2);
+    private Task BrowseExpansion2PackAsync(CancellationToken cancellationToken) =>
+        BrowseAsync(ElementsPack.CharacterExpansion2, cancellationToken);
 
-    private async Task BrowseAsync(ElementsPack pack)
+    private async Task BrowseAsync(ElementsPack pack, CancellationToken cancellationToken)
     {
         var picked = await _picker.PickFolderAsync();
 
         if (picked.TryGet(out var path))
         {
-            _packs.Set(pack, path);
+            await _packs.SetAsync(pack, path, cancellationToken);
         }
     }
 
