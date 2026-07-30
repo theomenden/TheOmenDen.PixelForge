@@ -9,16 +9,17 @@ using SkiaSharp;
 using TheOmenDen.PixelForge.Core.Buffers;
 using TheOmenDen.PixelForge.Core.Catalog;
 using TheOmenDen.PixelForge.Core.Palettes;
+using TheOmenDen.PixelForge.Schema;
 
 // Every property name written below comes from one of these. They are generated from the schema,
 // so renaming a property there is a compile error here rather than a manifest a consumer silently
 // cannot read. Aliased because JsonPropertyNames is a static class — it cannot be held in a local.
-using LayoutNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.Layouts.JsonPropertyNames;
-using PaletteNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.Palette.JsonPropertyNames;
-using RampNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.Ramp.JsonPropertyNames;
-using RootNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.JsonPropertyNames;
-using SchemaSlotNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.Slots.JsonPropertyNames;
-using SheetNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.Sheet.JsonPropertyNames;
+using LayoutNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.Layouts.JsonPropertyNames;
+using PaletteNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.Palette.JsonPropertyNames;
+using RampNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.Ramp.JsonPropertyNames;
+using RootNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.JsonPropertyNames;
+using SchemaSlotNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.Slots.JsonPropertyNames;
+using SheetNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.Sheet.JsonPropertyNames;
 
 namespace TheOmenDen.PixelForge.Core.Baking;
 
@@ -371,7 +372,9 @@ public static class RunManifest
 
     private static string ReadEmbeddedSchema()
     {
-        var assembly = typeof(RunManifest).Assembly;
+        // The Schema assembly, not this one: the schema is embedded beside the type generated
+        // from it, so the two can never drift to different files.
+        var assembly = typeof(RunManifestDocument).Assembly;
 
         // GetManifestResourceNames returns an array, which the ZLinq drop-in generator covers, so
         // this First binds to ZLinq without an AsValueEnumerable.

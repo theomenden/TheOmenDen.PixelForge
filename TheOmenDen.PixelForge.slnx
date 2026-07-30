@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/TheOmenDen.PixelForge.Core/TheOmenDen.PixelForge.Core.csproj" />
+    <Project Path="src/TheOmenDen.PixelForge.Schema/TheOmenDen.PixelForge.Schema.csproj" />
     <Project Path="src/TheOmenDen.PixelForge/TheOmenDen.PixelForge.csproj" />
   </Folder>
   <Folder Name="/tests/">

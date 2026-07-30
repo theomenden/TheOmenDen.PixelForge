@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Platform-agnostic, like Core: this is a contract, not a UI. -->
+    <TargetFramework>net10.0</TargetFramework>
+
+    <!-- Everything here is source-generated from JSON Schema, so it should be reflection-free by
+         construction. This asserts that rather than assuming it: IsAotCompatible switches on the
+         trim, single-file and AOT analyzers, and with TreatWarningsAsErrors an IL2026 or IL3050
+         from a generator update becomes a build failure instead of a surprise at publish time.
+         It is also what keeps PublishTrimmed viable for the app that ends up consuming this. -->
+    <IsAotCompatible>true</IsAotCompatible>
+
+    <!-- This project exists to quarantine generated code.
+         The Corvus.Text.Json generator emits <param> tags that do not match the signatures it
+         generates alongside them — around 1400 of them for this one schema — plus a cref to an
+         overload it does not declare. GenerateDocumentationFile and TreatWarningsAsErrors turn
+         every one into a build error, and the suppression cannot be scoped to generated files:
+         .editorconfig's `generated_code = true` exempts analyzer diagnostics only, never the
+         compiler's own CS-prefixed ones on source-generated trees.
+
+         So the suppression is scoped by PROJECT instead. Everything here is generated from
+         Schemas/*.json — there is exactly one hand-written declaration, and it is an empty partial
+         struct — so nothing loses a diagnostic that any human wrote. Core keeps full strictness.
+
+         Do not add hand-written code to this project. It belongs in Core. -->
+    <NoWarn>$(NoWarn);CS1572;CS1573;CS1574</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Corvus.Text.Json" />
+    <PackageReference Include="Corvus.Text.Json.SourceGenerator" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- AdditionalFiles is how the generator reads the schema at compile time. EmbeddedResource is
+         how RunManifest copies it beside the manifest at run time — Corvus consumes baked artifacts
+         with no build coupling, so the export folder has to carry its own contract. -->
+    <AdditionalFiles Include="Schemas\pixelforge-manifest-v1.json" />
+    <EmbeddedResource Include="Schemas\pixelforge-manifest-v1.json" />
+  </ItemGroup>
+
+</Project>

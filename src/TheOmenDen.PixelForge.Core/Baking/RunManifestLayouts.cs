@@ -2,14 +2,14 @@ using System.Collections.Immutable;
 using Corvus.Text.Json;
 using TheOmenDen.PixelForge.Core.Spritesheets;
 
-using CuratedClipNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.CuratedClip.JsonPropertyNames;
-using CuratedNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.CuratedLayout.JsonPropertyNames;
-using CuratedRowNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.CuratedClip.RowsEntity.JsonPropertyNames;
-using FullClipNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.FullClip.JsonPropertyNames;
-using FullFacingNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.FullLayout.FacingRowsEntity.JsonPropertyNames;
-using FullNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.FullLayout.JsonPropertyNames;
-using LayoutNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.Layouts.JsonPropertyNames;
-using RootNames = TheOmenDen.PixelForge.Core.Baking.RunManifestDocument.JsonPropertyNames;
+using CuratedClipNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.CuratedClip.JsonPropertyNames;
+using CuratedNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.CuratedLayout.JsonPropertyNames;
+using CuratedRowNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.CuratedClip.RowsEntity.JsonPropertyNames;
+using FullClipNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.FullClip.JsonPropertyNames;
+using FullFacingNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.FullLayout.FacingRowsEntity.JsonPropertyNames;
+using FullNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.FullLayout.JsonPropertyNames;
+using LayoutNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.Layouts.JsonPropertyNames;
+using RootNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.JsonPropertyNames;
 
 namespace TheOmenDen.PixelForge.Core.Baking;
 

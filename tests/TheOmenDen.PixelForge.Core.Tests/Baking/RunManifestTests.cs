@@ -9,7 +9,7 @@ using TheOmenDen.PixelForge.Core.Spritesheets;
 // Corvus.Text.Json is aliased rather than imported: it ships its own JsonElement, and importing the
 // namespace makes every System.Text.Json.JsonElement in this file ambiguous (CS0104).
 using ParsedManifest =
-    Corvus.Text.Json.ParsedJsonDocument<TheOmenDen.PixelForge.Core.Baking.RunManifestDocument>;
+    Corvus.Text.Json.ParsedJsonDocument<TheOmenDen.PixelForge.Schema.RunManifestDocument>;
 
 namespace TheOmenDen.PixelForge.Core.Tests.Baking;
 
