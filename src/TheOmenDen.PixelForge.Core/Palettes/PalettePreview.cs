@@ -133,7 +133,7 @@ public sealed class PalettePreview : Disposable
                 return result;
             }
 
-            return Upscale(toned, scale);
+            return SheetBaker.Upscale(toned, scale);
         }
         finally
         {
@@ -177,23 +177,6 @@ public sealed class PalettePreview : Disposable
         return SheetBaker.ToCanonical(strip);
     }
 
-    private static Result<SKBitmap, BakeFailure> Upscale(SKBitmap source, int scale)
-    {
-        using var scaled = new SKBitmap(new SKImageInfo(
-            source.Width * scale, source.Height * scale, SKColorType.Rgba8888, SKAlphaType.Premul));
-
-        using (var canvas = new SKCanvas(scaled))
-        {
-            canvas.Clear(SKColors.Transparent);
-            canvas.DrawBitmap(
-                source,
-                SKRect.Create(0, 0, source.Width, source.Height),
-                SKRect.Create(0, 0, scaled.Width, scaled.Height),
-                SheetBaker.PixelExact);
-        }
-
-        return SheetBaker.ToCanonical(scaled);
-    }
 
     protected override void Dispose(bool disposing)
     {

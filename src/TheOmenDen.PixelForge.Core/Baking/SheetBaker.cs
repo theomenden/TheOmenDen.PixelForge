@@ -249,6 +249,38 @@ public static class SheetBaker
     }
 
     /// <summary>
+    /// Enlarges a bitmap by a whole-number factor, nearest-neighbour.
+    /// </summary>
+    /// <param name="source">What to enlarge. Left alone; the result is a new bitmap.</param>
+    /// <param name="scale">The multiplier. 1 still copies, so the caller owns one bitmap either way.</param>
+    /// <returns>The enlarged bitmap in canonical format, or why it could not be converted.</returns>
+    /// <remarks>
+    /// Here rather than on each preview because <see cref="PixelExact"/> lives here: every path
+    /// that puts pixel art on screen has to enlarge it the same way, and a second copy of this is
+    /// a second chance for one of them to drift to <see cref="SKFilterMode.Linear"/> and blur.
+    /// </remarks>
+    public static Result<SKBitmap, BakeFailure> Upscale(SKBitmap source, int scale)
+    {
+        Guard.IsNotNull(source);
+        Guard.IsGreaterThan(scale, 0);
+
+        using var scaled = new SKBitmap(new SKImageInfo(
+            source.Width * scale, source.Height * scale, SKColorType.Rgba8888, SKAlphaType.Premul));
+
+        using (var canvas = new SKCanvas(scaled))
+        {
+            canvas.Clear(SKColors.Transparent);
+            canvas.DrawBitmap(
+                source,
+                SKRect.Create(0, 0, source.Width, source.Height),
+                SKRect.Create(0, 0, scaled.Width, scaled.Height),
+                PixelExact);
+        }
+
+        return ToCanonical(scaled);
+    }
+
+    /// <summary>
     /// Slices the 23x4 assembly down to the curated 5x24 sheet: 8 animations on 3 facings,
     /// north dropped. Frames land left-aligned, so a clip shorter than
     /// <see cref="SheetLayout.OutputColumns"/> leaves its trailing cells transparent.
