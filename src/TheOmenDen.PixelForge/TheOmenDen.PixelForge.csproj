@@ -111,6 +111,23 @@
     <Content Include="appsettings.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!--
+    Serilog.Settings.Configuration resolves the sinks and enrichers named in appsettings.json's
+    "Using" list by assembly name, then finds their extension methods by reflection. Nothing in
+    the code calls WriteTo.Console or Enrich.WithProcessId, so without these roots the trimmer
+    drops the assemblies entirely and LoadConfigurationAssemblies throws at host build — which
+    under AOT is a hard crash before the window ever appears. This list must stay in step with
+    the "Using" array; Serilog itself is rooted for MinimumLevel/Destructure/Enrich, which the
+    reader also reaches reflectively.
+  -->
+  <ItemGroup>
+    <TrimmerRootAssembly Include="Serilog" />
+    <TrimmerRootAssembly Include="Serilog.Sinks.Console" />
+    <TrimmerRootAssembly Include="Serilog.Sinks.Debug" />
+    <TrimmerRootAssembly Include="Serilog.Enrichers.Process" />
+    <TrimmerRootAssembly Include="Serilog.Enrichers.Memory" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\TheOmenDen.PixelForge.Core\TheOmenDen.PixelForge.Core.csproj" />
   </ItemGroup>
@@ -126,9 +143,45 @@
 
   <!-- Publish Properties -->
   <PropertyGroup>
-    <PublishReadyToRun Condition="'$(Configuration)' == 'Debug'">False</PublishReadyToRun>
-    <PublishReadyToRun Condition="'$(Configuration)' != 'Debug'">True</PublishReadyToRun>
-    <PublishTrimmed Condition="'$(Configuration)' == 'Debug'">False</PublishTrimmed>
-    <PublishTrimmed Condition="'$(Configuration)' != 'Debug'">True</PublishTrimmed>
+    <!--
+      Native AOT, verified end to end: ILC compiles the whole app - WinUI/XAML, CsWinRT, Win2D,
+      SkiaSharp, Core - into a single native exe, and the UI suite scores the same as it does
+      against the JIT build.
+
+      This replaced PublishTrimmed + PublishReadyToRun, which could not publish at all: ILLink
+      reported trim warnings inside Microsoft.Windows.SDK.NET and WinRT.Runtime, which ILC's
+      CsWinRT-aware path does not produce. AOT is the cleaner of the two here, not the more
+      aggressive one. PublishReadyToRun is mutually exclusive with PublishAot.
+
+      PublishTrimmed is deliberately not set *here*. The SDK still derives it from PublishAot, so
+      it evaluates to true either way - but setting it directly also opted the project into
+      ILLink's size-optimization path, which failed `dotnet build -c Release` with NETSDK1102
+      because a build is not a self-contained publish. Under PublishAot that path is ILC's
+      instead, and Release builds clean. Setting it back would re-break the Release build.
+
+      The native link step shells out to vswhere, so publish needs
+      "C:\Program Files (x86)\Microsoft Visual Studio\Installer" on PATH - a Developer prompt has
+      it, a bare shell does not, and the failure surfaces as a garbled link.exe command line.
+    -->
+    <PublishAot Condition="'$(Configuration)' != 'Debug'">true</PublishAot>
+    <PublishReadyToRun>false</PublishReadyToRun>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!--
+      Three referenced assemblies analyse dirty, and TreatWarningsAsErrors would otherwise fail
+      the publish on code we do not own. Suppressed by code rather than by turning the switch off,
+      so our own trim/AOT violations stay build errors - IL2104 and IL3053 are only ever the
+      per-assembly aggregates for a *reference*; our own would surface as IL2026/IL3050 directly.
+
+        Serilog.Settings.Configuration  resolves sinks and enrichers by reflection. Exercised, and
+                                        it works - see the TrimmerRootAssembly list above, which is
+                                        what makes it work. IL3000/IL3002 are its single-file
+                                        assembly-discovery fallbacks, which the "Using" section in
+                                        appsettings.json means we never reach.
+        Serilog.Expressions             the Conditional() filter expression for the fatal sink.
+        SkiaSharp.Views.WinUI.Native.Projection  trim-only (IL2104); ILC reports no AOT warning.
+    -->
+    <NoWarn>$(NoWarn);IL2104;IL3053;IL3000;IL3002</NoWarn>
   </PropertyGroup>
 </Project>

@@ -194,8 +194,8 @@ public sealed class RunManifestTests
         AssertExactProperties(palette.GetProperty("sourceRamp"), "ramp", "name", "isHuman", "steps");
 
         // tone is optional, so both shapes are pinned — a toned sheet and a bare one.
-        AssertExactProperties(sheets[0], "sheet (toned)", "name", "file", "geometry", "tone", "slots");
-        AssertExactProperties(sheets[1], "sheet (no tone)", "name", "file", "geometry", "slots");
+        AssertExactProperties(sheets[0], "sheet (toned)", "name", "file", "geometry", "format", "tone", "slots");
+        AssertExactProperties(sheets[1], "sheet (no tone)", "name", "file", "geometry", "format", "slots");
 
         AssertExactProperties(sheets[0].GetProperty("slots"), "slots", "bottom", "top", "head");
     }
@@ -217,7 +217,7 @@ public sealed class RunManifestTests
         AssertExactProperties(
             curated,
             "curatedLayout",
-            "width", "height", "cellSize", "columns", "rows", "frameDurationMs", "facings", "clips");
+            "width", "height", "cellSize", "columns", "rows", "frameDurationMs", "facings", "headings", "clips");
 
         AssertExactProperties(
             curated.GetProperty("clips")[0],
@@ -232,7 +232,7 @@ public sealed class RunManifestTests
         AssertExactProperties(
             full,
             "fullLayout",
-            "width", "height", "cellSize", "columns", "rows", "frameDurationMs", "facingRows", "clips");
+            "width", "height", "cellSize", "columns", "rows", "frameDurationMs", "facingRows", "headings", "clips");
 
         AssertExactProperties(
             full.GetProperty("facingRows"),
@@ -249,7 +249,7 @@ public sealed class RunManifestTests
     [Fact]
     public async Task SchemaVersion_ComesFromTheSchemaItself()
     {
-        Assert.Equal("1.1.0", RunManifest.SchemaVersion);
+        Assert.Equal("1.2.0", RunManifest.SchemaVersion);
         Assert.Contains(
             $"\"const\": \"{RunManifest.SchemaVersion}\"",
             RunManifest.SchemaText,
@@ -525,6 +525,81 @@ public sealed class RunManifestTests
         // The copy is the schema the generator compiled against, not a paraphrase of it.
         Assert.Equal(RunManifest.SchemaText, await File.ReadAllTextAsync(schema, TestContext.Current.CancellationToken));
         Assert.Contains("\"$id\"", RunManifest.SchemaText, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Reads one layout's heading table back as bearing to facing name.
+    /// </summary>
+    private static Dictionary<int, string> Headings(JsonDocument manifest, string layout)
+    {
+        var table = new Dictionary<int, string>();
+
+        foreach (var entry in manifest.RootElement
+            .GetProperty("layouts").GetProperty(layout).GetProperty("headings").EnumerateArray())
+        {
+            table[entry.GetProperty("bearing").GetInt32()] = entry.GetProperty("facing").GetString()!;
+        }
+
+        return table;
+    }
+
+    /// <summary>
+    /// Eight-way movement against four-way art. Time Elements ships no diagonal frames in any pack
+    /// and they cannot be synthesised, so a consumer heading north-west has to be told which row to
+    /// play. Publishing it here is what stops Unity and MonoGame answering that differently.
+    /// </summary>
+    [Fact]
+    public async Task Write_PublishesAHeadingForEveryCompassPoint()
+    {
+        using var manifest = await ManifestAsync(Recipe("body-01", SheetGeometry.Full));
+
+        var headings = Headings(manifest, "full");
+
+        Assert.Equal(8, headings.Count);
+
+        // Diagonals resolve to the horizontal cardinal: a side view reads as movement where a front
+        // or back view reads as standing still.
+        Assert.Equal("north", headings[0]);
+        Assert.Equal("east", headings[45]);
+        Assert.Equal("east", headings[90]);
+        Assert.Equal("east", headings[135]);
+        Assert.Equal("south", headings[180]);
+        Assert.Equal("west", headings[225]);
+        Assert.Equal("west", headings[270]);
+        Assert.Equal("west", headings[315]);
+    }
+
+    /// <summary>
+    /// Curated geometry drops north, so it cannot serve a northward heading at all — and says so by
+    /// resolving it to something it does have rather than by omitting the entry.
+    /// </summary>
+    [Fact]
+    public async Task Write_ResolvesNorthAwayForCuratedGeometry()
+    {
+        using var manifest = await ManifestAsync(Recipe("body-01"));
+
+        var headings = Headings(manifest, "curated");
+
+        Assert.Equal(8, headings.Count);
+        Assert.DoesNotContain(headings.Values, facing => string.Equals(facing, "north", StringComparison.Ordinal));
+        Assert.Equal("east", headings[0]);
+    }
+
+    /// <summary>
+    /// Which container each sheet was written in. Derivable from the extension, but a consumer
+    /// selecting sheets should not have to parse filenames to do it.
+    /// </summary>
+    [Fact]
+    public async Task Write_NamesTheContainerEachSheetWasWrittenIn()
+    {
+        using var manifest = await ManifestAsync(
+            Recipe("body-01"),
+            Recipe("body-02") with { Format = SheetFormat.Png });
+
+        var sheets = manifest.RootElement.GetProperty("sheets");
+
+        Assert.Equal("webp", sheets[0].GetProperty("format").GetString());
+        Assert.Equal("png", sheets[1].GetProperty("format").GetString());
     }
 
     [Fact]

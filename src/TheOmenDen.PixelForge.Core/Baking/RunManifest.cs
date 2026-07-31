@@ -319,6 +319,7 @@ public static class RunManifest
         writer.WriteString(SheetNames.NameUtf8, recipe.Name);
         writer.WriteString(SheetNames.FileUtf8, recipe.RelativePath);
         writer.WriteString(SheetNames.GeometryUtf8, GeometryName(recipe.Geometry));
+        writer.WriteString(SheetNames.FormatUtf8, FormatName(recipe.Format));
 
         // Absent rather than blank when the sheet carries no skin. The CSV writes an empty cell
         // because a spreadsheet shows the text "null" as data; JSON can say "not applicable".
@@ -388,6 +389,22 @@ public static class RunManifest
         SheetGeometry.Curated => LayoutNames.Curated,
         SheetGeometry.Full => LayoutNames.Full,
         _ => ThrowHelper.ThrowArgumentOutOfRangeException<string>(nameof(geometry)),
+    };
+
+    /// <summary>
+    /// The schema's spelling of a container.
+    /// </summary>
+    /// <remarks>
+    /// Lowercase, matching the enum in the schema rather than <see cref="SheetFormat"/>'s member
+    /// names — <c>ToString()</c> would emit <c>"Webp"</c> and fail validation. The extension
+    /// mapping lives in <see cref="SheetWriter.ExtensionFor"/>; this is the manifest's vocabulary
+    /// for the same choice.
+    /// </remarks>
+    private static string FormatName(SheetFormat format) => format switch
+    {
+        SheetFormat.Webp => "webp",
+        SheetFormat.Png => "png",
+        _ => ThrowHelper.ThrowArgumentOutOfRangeException<string>(nameof(format)),
     };
 
     /// <summary>Formats a colour as the schema's uppercase <c>#RRGGBB</c>. Alpha is never carried.</summary>

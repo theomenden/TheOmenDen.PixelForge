@@ -12,7 +12,7 @@
     },
     "schemaVersion": {
       "type": "string",
-      "const": "1.1.0",
+      "const": "1.2.0",
       "description": "Semantic version of this manifest format, and the single place it is declared — the writer emits this constant rather than a literal of its own, so a drifted producer fails validation instead of shipping a plausible but wrong version. Policy: an optional property added at one of the open objects below is a MINOR bump. A change to one of the three closed objects (slots, curatedClip.rows, fullLayout.facingRows), or a removed, retyped or newly required property anywhere, mints a new $id, a new -vN filename and a new generated type."
     },
     "runId": {
@@ -37,6 +37,24 @@
     "facing": {
       "enum": ["south", "west", "east", "north"],
       "description": "Direction the avatar faces. Curated sheets drop north entirely."
+    },
+    "heading": {
+      "type": "object",
+      "required": ["bearing", "facing"],
+      "description": "Which facing to play for one compass heading. Added at 1.2.0. For a diagonal heading the facing is an approximation, because the source art has no diagonal frames at all — none exist in the core pack, either character expansion, or the tdsm variant, and a three-quarter pose cannot be derived from the front and side views.",
+      "properties": {
+        "bearing": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 315,
+          "description": "Compass heading in degrees: north 0, east 90, south 180, west 270. Always a multiple of 45, but deliberately NOT constrained with multipleOf: the generated validator rejects documents that satisfy it — 0 and 315 both fail — so stating it there turns every manifest into a schema violation. The bound is expressed by minimum/maximum and by the eight-item array length instead."
+        },
+        "facing": {
+          "type": "string",
+          "enum": ["south", "west", "east", "north"],
+          "description": "The facing to draw. Spelled out rather than $ref-ing #/$defs/facing: the generator emits no named property accessor for a $ref here, and the manifest writer takes every property name from the generated type so that a producer cannot drift from the schema. Keep these members identical to #/$defs/facing."
+        }
+      }
     },
     "ramp": {
       "type": "object",
@@ -154,6 +172,13 @@
           "items": { "$ref": "#/$defs/facing" },
           "description": "Facings this geometry carries, in row order within a clip."
         },
+        "headings": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/heading" },
+          "description": "All eight compass headings and the facing to play for each. Optional, added at 1.2.0. Every diagonal is an approximation, and so is north here — curated geometry drops it, so a northward heading resolves to a facing this sheet actually has rather than being omitted."
+        },
         "clips": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/curatedClip" } }
       }
     },
@@ -179,6 +204,13 @@
             "east": { "type": "integer", "minimum": 0 },
             "north": { "type": "integer", "minimum": 0 }
           }
+        },
+        "headings": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/heading" },
+          "description": "All eight compass headings and the facing to play for each. Optional, added at 1.2.0. The four cardinals are exact; the four diagonals are approximations, resolved to the more horizontal neighbour because a side view reads as movement in top-down pixel art where a front or back view reads as standing still."
         },
         "clips": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/fullClip" } }
       }
@@ -214,7 +246,11 @@
       "required": ["name", "file", "geometry", "slots"],
       "properties": {
         "name": { "type": "string", "minLength": 1, "description": "The sheet's stem, without extension." },
-        "file": { "type": "string", "minLength": 1, "description": "The file written, including extension. Lossless WebP, verified by round trip." },
+        "file": { "type": "string", "minLength": 1, "description": "The file written, including extension. Lossless either way, verified by round trip rather than by trusting an encoder flag — see format." },
+        "format": {
+          "enum": ["webp", "png"],
+          "description": "Container this sheet was encoded into. Optional, added at 1.2.0; absent means webp, which is what every sheet written before 1.2.0 was. Derivable from file's extension, but a consumer selecting sheets should not have to parse filenames. PNG exists because neither Unity's TextureImporter nor MonoGame's content pipeline reads WebP."
+        },
         "geometry": {
           "enum": ["curated", "full"],
           "description": "Which layout under layouts describes this sheet."

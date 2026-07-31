@@ -84,4 +84,25 @@ public static class SheetLayout
     /// <returns>A row index into the source geometry, 0 to <see cref="SourceRows"/> - 1.</returns>
     public static int RowForBearing(int bearing) =>
         SourceBearings.IndexOf(FacingResolution.Resolve(bearing, SourceBearings.AsSpan()));
+
+    /// <summary>
+    /// Name of each source facing row, index-aligned with <see cref="SourceBearings"/>.
+    /// </summary>
+    /// <remarks>
+    /// The single source for these names. <see cref="SheetIndex.Facings"/> slices its curated three
+    /// from here rather than restating them, so the two cannot disagree about which row is which.
+    /// </remarks>
+    public static ImmutableArray<string> SourceFacings { get; } = ["south", "west", "east", "north"];
+
+    /// <summary>
+    /// The facing to draw for a heading, given the bearings a geometry actually carries.
+    /// </summary>
+    /// <param name="bearing">A compass heading in degrees.</param>
+    /// <param name="available">
+    /// The bearings this geometry has — <see cref="SourceBearings"/> or
+    /// <see cref="CuratedBearings"/>.
+    /// </param>
+    /// <returns>The facing name, always one <paramref name="available"/> contains.</returns>
+    public static string FacingForBearing(int bearing, ReadOnlySpan<int> available) =>
+        SourceFacings[SourceBearings.IndexOf(FacingResolution.Resolve(bearing, available))];
 }

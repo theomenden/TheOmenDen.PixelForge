@@ -8,6 +8,7 @@ using CuratedRowNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.Curated
 using FullClipNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.FullClip.JsonPropertyNames;
 using FullFacingNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.FullLayout.FacingRowsEntity.JsonPropertyNames;
 using FullNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.FullLayout.JsonPropertyNames;
+using HeadingNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.Heading.JsonPropertyNames;
 using LayoutNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.Layouts.JsonPropertyNames;
 using RootNames = TheOmenDen.PixelForge.Schema.RunManifestDocument.JsonPropertyNames;
 
@@ -57,6 +58,33 @@ internal static class RunManifestLayouts
         writer.WriteEndObject();
     }
 
+    /// <summary>
+    /// Writes the eight compass headings and the facing to play for each.
+    /// </summary>
+    /// <param name="writer">The manifest writer.</param>
+    /// <param name="property">The layout's <c>headings</c> property name.</param>
+    /// <param name="available">The bearings this geometry actually carries.</param>
+    /// <remarks>
+    /// The art has four facings and no diagonals — none exist in the core pack, either character
+    /// expansion, or the <c>tdsm</c> variant, and a three-quarter pose cannot be derived from the
+    /// front and side views. So a consumer moving north-west has to be told what to draw, and
+    /// answering it here is what stops Unity and MonoGame each deciding for themselves.
+    /// </remarks>
+    private static void WriteHeadings(Utf8JsonWriter writer, ReadOnlySpan<byte> property, ReadOnlySpan<int> available)
+    {
+        writer.WriteStartArray(property);
+
+        foreach (var bearing in FacingResolution.Bearings)
+        {
+            writer.WriteStartObject();
+            writer.WriteNumber(HeadingNames.BearingUtf8, bearing);
+            writer.WriteString(HeadingNames.FacingUtf8, SheetLayout.FacingForBearing(bearing, available));
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+    }
+
     private static void WriteCurated(Utf8JsonWriter writer)
     {
         writer.WriteStartObject(LayoutNames.CuratedUtf8);
@@ -80,6 +108,8 @@ internal static class RunManifestLayouts
         }
 
         writer.WriteEndArray();
+
+        WriteHeadings(writer, CuratedNames.HeadingsUtf8, SheetLayout.CuratedBearings.AsSpan());
 
         writer.WriteStartArray(CuratedNames.ClipsUtf8);
 
@@ -136,6 +166,8 @@ internal static class RunManifestLayouts
         writer.WriteNumber(FullFacingNames.EastUtf8, 2);
         writer.WriteNumber(FullFacingNames.NorthUtf8, 3);
         writer.WriteEndObject();
+
+        WriteHeadings(writer, FullNames.HeadingsUtf8, SheetLayout.SourceBearings.AsSpan());
 
         writer.WriteStartArray(FullNames.ClipsUtf8);
 

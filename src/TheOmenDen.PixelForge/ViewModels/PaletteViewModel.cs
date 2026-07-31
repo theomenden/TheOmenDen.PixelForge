@@ -30,7 +30,10 @@ public sealed partial class PaletteViewModel : ObservableObject
         // deleting a ramp updates the list without a clear-and-rebuild — and therefore without
         // the selection-restore dance a rebuild forces.
         RampView = new AdvancedCollectionView(_ramps.Ramps, isLiveShaping: true);
-        RampView.SortDescriptions.Add(new SortDescription(nameof(SkinRamp.Name), SortDirection.Ascending));
+        // SortDescription<T>, not SortDescription: the sort is reflection-based, and only the
+        // generic form carries the DynamicallyAccessedMembers annotation that roots SkinRamp's
+        // properties for the trimmer. The non-generic one is IL2026 under PublishTrimmed.
+        RampView.SortDescriptions.Add(new SortDescription<SkinRamp>(nameof(SkinRamp.Name), SortDirection.Ascending));
 
         SelectedRamp = _ramps.Ramps.Count > 0 ? _ramps.Ramps[0] : null;
     }

@@ -24,7 +24,13 @@ public static class SheetIndex
     public const string FileName = "index.csv";
 
     /// <summary>Source row order, north dropped — see <see cref="SheetLayout.FacingCount"/>.</summary>
-    public static ImmutableArray<string> Facings { get; } = ["south", "west", "east"];
+    /// <remarks>
+    /// Sliced from <see cref="SheetLayout.SourceFacings"/> rather than restated. North is the last
+    /// source row and <see cref="SheetLayout.FacingCount"/> is exactly the count that survives, so
+    /// this cannot fall out of step with the row order the baker actually writes.
+    /// </remarks>
+    public static ImmutableArray<string> Facings { get; } =
+        [.. SheetLayout.SourceFacings.AsSpan()[..SheetLayout.FacingCount]];
 
     public static ImmutableArray<SheetIndexRow> Rows { get; } = Build();
 
