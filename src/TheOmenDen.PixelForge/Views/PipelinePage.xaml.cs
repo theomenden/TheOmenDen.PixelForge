@@ -33,6 +33,13 @@ public sealed partial class PipelinePage : Page
     private bool _modeReady;
 
     /// <summary>
+    /// The same gate as <see cref="_modeReady"/>, for the file-type Segmented. Two flags rather
+    /// than one: the controls apply their templates independently, so a shared flag would let one
+    /// control's initialisation be read as the other's user choice.
+    /// </summary>
+    private bool _formatReady;
+
+    /// <summary>
     /// The still above the picker. Owned by the page rather than the view model, because it deals
     /// in image types the view model deliberately cannot name.
     /// </summary>
@@ -254,12 +261,17 @@ public sealed partial class PipelinePage : Page
         ExportModeSegmented.SelectedIndex = ViewModel.SelectedModeIndex;
         _modeReady = true;
 
+        _formatReady = false;
+        ExportFormatSegmented.SelectedIndex = ViewModel.SelectedFormatIndex;
+        _formatReady = true;
+
         _preview.Start();
     }
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
         _modeReady = false;
+        _formatReady = false;
 
         ViewModel.Notified -= OnNotified;
 
@@ -275,6 +287,19 @@ public sealed partial class PipelinePage : Page
         if (_modeReady && ExportModeSegmented.SelectedIndex >= 0)
         {
             ViewModel.SelectedModeIndex = ExportModeSegmented.SelectedIndex;
+        }
+    }
+
+    /// <summary>
+    /// A selection of -1 is the control clearing itself while it re-realises its items, never a
+    /// user choice - taking it would reset the file type to WebP behind the user's back, which on
+    /// this control means silently writing files no game engine can open.
+    /// </summary>
+    private void OnExportFormatChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_formatReady && ExportFormatSegmented.SelectedIndex >= 0)
+        {
+            ViewModel.SelectedFormatIndex = ExportFormatSegmented.SelectedIndex;
         }
     }
 

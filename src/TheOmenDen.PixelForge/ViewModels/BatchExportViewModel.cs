@@ -43,6 +43,17 @@ public sealed partial class BatchExportViewModel : ObservableObject
     private const string BothDescription =
         "Both kinds of sheet, one file each per combination, so twice as many files. You also get index.csv and clips.csv beside them.";
 
+    private const ExportFormat DefaultFormat = ExportFormat.Webp;
+
+    private const string WebpDescription =
+        "Lossless WebP. Smaller files, and what Corvus Connection reads. Unity and MonoGame cannot open these.";
+
+    private const string PngDescription =
+        "Lossless PNG. Larger files, and the only kind Unity and MonoGame can import. Pick this if the sheets are going into a game engine.";
+
+    private const string BothFormatsDescription =
+        "Both kinds of file, so twice as many again. Pick this to feed Corvus Connection and a game engine from one run.";
+
     private readonly SourcePackService _packs;
     private readonly CatalogService _catalog;
     private readonly PickerService _picker;
@@ -138,6 +149,53 @@ public sealed partial class BatchExportViewModel : ObservableObject
         _ => CuratedDescription,
     };
 
+    /// <summary>Index into the format Segmented — no converter needed.</summary>
+    public int SelectedFormatIndex
+    {
+        get => field;
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(FormatDescription));
+            OnPropertyChanged(nameof(PlannedCount));
+        }
+    }
+
+    /// <summary>
+    /// The container the selected index means, on the same terms as <see cref="Mode"/>.
+    /// </summary>
+    /// <remarks>
+    /// An index outside the enum is the control clearing itself (-1) rather than a choice, and the
+    /// fallback is deliberately the cheapest option rather than the largest — an unchecked cast
+    /// would make that <see cref="ExportFormat.Both"/> and double the run.
+    /// </remarks>
+    public ExportFormat Format => Enum.IsDefined((ExportFormat)SelectedFormatIndex)
+        ? (ExportFormat)SelectedFormatIndex
+        : DefaultFormat;
+
+    /// <summary>The tradeoff, stated where the choice is made.</summary>
+    public string FormatDescription => Format switch
+    {
+        ExportFormat.Png => PngDescription,
+        ExportFormat.Both => BothFormatsDescription,
+        _ => WebpDescription,
+    };
+
+    /// <summary>The containers a run writes, in the order the files appear.</summary>
+    private ImmutableArray<SheetFormat> FormatsToWrite() => Format switch
+    {
+        ExportFormat.Png => [SheetFormat.Png],
+        ExportFormat.Both => [SheetFormat.Webp, SheetFormat.Png],
+        _ => [SheetFormat.Webp],
+    };
+
     /// <summary>Where sheets and manifests are written.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ExportCommand))]
@@ -210,16 +268,31 @@ public sealed partial class BatchExportViewModel : ObservableObject
         {
             var planned = PlannedCounts.Sheets;
 
-            if (Mode is not ExportMode.Both)
+            // Both axes double independently: two geometries and two containers is four files per
+            // combination. Saturating rather than doubling blindly, or the widest selections would
+            // come back negative.
+            if (Mode is ExportMode.Both)
             {
-                return planned;
+                planned = Doubled(planned);
             }
 
-            // Both writes every combination in both geometries. Saturating rather than doubling
-            // blindly, or the widest selections would come back negative.
-            return planned > long.MaxValue / 2 ? long.MaxValue : planned * 2;
+            if (Format is ExportFormat.Both)
+            {
+                planned = Doubled(planned);
+            }
+
+            return planned;
         }
     }
+
+    /// <summary>
+    /// Twice <paramref name="value"/>, saturating rather than overflowing.
+    /// </summary>
+    /// <remarks>
+    /// The widest selections are already near the top of the range, and a label that reports a
+    /// negative file count is worse than one that reports an implausibly large positive.
+    /// </remarks>
+    private static long Doubled(long value) => value > long.MaxValue / 2 ? long.MaxValue : value * 2;
 
     /// <summary>
     /// The one recipe the page's composite still stands for, or none while the selection plans
@@ -305,12 +378,16 @@ public sealed partial class BatchExportViewModel : ObservableObject
 
         var planned = ExportPlan.Layers(selections, SelectedTones(), Mode, HeroRegistry.Labels(heroes));
 
-        if (!planned.TryGet(out var recipes))
+        if (!planned.TryGet(out var expanded))
         {
             Notify(ExportPlan.Explain(planned.Error), StatusLevel.Warning);
 
             return;
         }
+
+        // Stamped after expanding, so the warn threshold below sees the count the run will actually
+        // write rather than the count before the container axis multiplies it.
+        var recipes = LayerPlan.InFormats(expanded, FormatsToWrite().AsSpan());
 
         var run = new LayerRun
         {

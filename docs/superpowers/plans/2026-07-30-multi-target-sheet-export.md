@@ -103,8 +103,11 @@ five-entry table.
     `x:Bind`**, copying `ExportModeSegmented` exactly. The existing comment records why: `Segmented`
     applies its initial index from `OnApplyTemplate`, after this page's bindings are live, so a
     TwoWay binding races the user and silently overwrites their choice.
-21. SettingsPage `SettingsCard` + Browse button for the Time Fantasy pack, mirroring
-    `BtnBrowseCorePack`.
+21. ~~SettingsPage `SettingsCard` + Browse button for the Time Fantasy pack~~ — **deferred**. After
+    the phase-4 reframe no Time Fantasy art is baked, so this row would let a user configure a pack
+    nothing consumes. `SourcePacks.FantasyRoot` exists and is tested; the picker lands when
+    something reads it. The risk note about keeping it outside the three-pack readiness gate still
+    applies whenever that happens.
 22. `AutomationId` on both new controls — `ui-tests.ps1` fails the run without them — plus `Test-UI`
     blocks, and a look at `tests/ui-results/` screenshots, since UIA assertions pass while a page is
     visually broken.

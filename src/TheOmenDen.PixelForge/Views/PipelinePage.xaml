@@ -155,6 +155,54 @@
                     Style="{StaticResource CaptionTextBlockStyle}"
                     Text="{x:Bind ViewModel.ModeDescription, Mode=OneWay}"
                     TextWrapping="Wrap" />
+
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="File type" />
+
+                <!--
+                    Driven from code-behind for the same reason the mode Segmented above is:
+                    Segmented applies its initial index from OnApplyTemplate, after this page's
+                    bindings are live, so a TwoWay x:Bind races the user and silently writes its
+                    own index back over an early choice.
+                -->
+                <controls:Segmented
+                    x:Name="ExportFormatSegmented"
+                    AutomationProperties.AutomationId="ExportFormatSegmented"
+                    AutomationProperties.Name="File type"
+                    SelectionChanged="OnExportFormatChanged"
+                    SelectionMode="Single">
+                    <!--
+                        These carry explicit AutomationIds where the mode Segmented above relies on
+                        generated ones. Its third segment is also called "Both", and the ids the
+                        tree generates come from the content — so a generated id here would be
+                        ambiguous with it, and the automation helper takes the first match. The
+                        Names disambiguate the same collision for a screen reader, which would
+                        otherwise hear "Both" twice on one page with nothing to tell them apart.
+                    -->
+                    <controls:SegmentedItem
+                        AutomationProperties.AutomationId="ExportFormatWebp"
+                        AutomationProperties.Name="WebP only"
+                        Content="WebP"
+                        Icon="{ui:FontIcon Glyph=&#xE8B9;}"
+                        ToolTipService.ToolTip="Smaller files, read by Corvus Connection. Unity and MonoGame cannot open these." />
+                    <controls:SegmentedItem
+                        AutomationProperties.AutomationId="ExportFormatPng"
+                        AutomationProperties.Name="PNG only"
+                        Content="PNG"
+                        Icon="{ui:FontIcon Glyph=&#xEB9F;}"
+                        ToolTipService.ToolTip="The only kind Unity and MonoGame can import. Pick this for a game engine." />
+                    <controls:SegmentedItem
+                        AutomationProperties.AutomationId="ExportFormatBoth"
+                        AutomationProperties.Name="Both file types"
+                        Content="Both"
+                        Icon="{ui:FontIcon Glyph=&#xE8C6;}"
+                        ToolTipService.ToolTip="Writes both kinds of file, which doubles the file count again." />
+                </controls:Segmented>
+                <TextBlock
+                    AutomationProperties.AutomationId="ExportFormatDescription"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                    Style="{StaticResource CaptionTextBlockStyle}"
+                    Text="{x:Bind ViewModel.FormatDescription, Mode=OneWay}"
+                    TextWrapping="Wrap" />
             </StackPanel>
         </Grid>
 

@@ -194,11 +194,40 @@ Test-UI 'Batch export page has its controls' {
     winapp ui invoke 'NavPipeline' -a $AppPid
     Start-Sleep -Milliseconds 900
     winapp ui wait-for 'ExportModeSegmented' -a $AppPid -t 3000
+    winapp ui wait-for 'ExportFormatSegmented' -a $AppPid -t 3000
+    winapp ui wait-for 'ExportFormatDescription' -a $AppPid -t 3000
     winapp ui wait-for 'PlannedBreakdownText' -a $AppPid -t 3000
     winapp ui wait-for 'HeroPrefixText' -a $AppPid -t 3000
     winapp ui wait-for 'ClassNameText' -a $AppPid -t 3000
     winapp ui wait-for 'CompositePreviewImage' -a $AppPid -t 3000
     winapp ui wait-for 'ExportProgress' -a $AppPid -t 3000
+}
+
+# Corvus reads WebP and neither Unity nor MonoGame can open it, so picking the file type is the
+# whole point of the control. The description under it has to follow the choice: it is the only
+# place the app says which of them a given file can be opened by, and a stale one would send
+# someone to an engine with sheets it silently refuses.
+Test-UI 'File type description follows the file type chosen' {
+    winapp ui invoke 'NavPipeline' -a $AppPid
+    Start-Sleep -Milliseconds 900
+
+    # Matched on explicit AutomationIds, not the generated itm-<content>-<hash> ids the mode
+    # segments use: the mode control's third segment is also "Both", and Select-Segment takes the
+    # first match in the tree, so a generated id here would silently drive the wrong control.
+    Select-Segment 'ExportFormatPng'
+    $png = Get-Text 'ExportFormatDescription'
+    if ($png -notmatch 'PNG') { throw "PNG description not shown: $png" }
+
+    Select-Segment 'ExportFormatWebp'
+    $webp = Get-Text 'ExportFormatDescription'
+    if ($webp -notmatch 'WebP') { throw "WebP description not shown: $webp" }
+    if ($webp -eq $png) { throw "description did not change between file types: '$webp'" }
+
+    Select-Segment 'ExportFormatBoth'
+    $both = Get-Text 'ExportFormatDescription'
+    if ($both -notmatch 'Both kinds of file') { throw "both description not shown: $both" }
+
+    $global:LASTEXITCODE = 0
 }
 
 # The output folder is session state, never persisted, so a freshly launched app always

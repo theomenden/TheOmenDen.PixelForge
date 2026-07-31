@@ -137,6 +137,48 @@ public static class LayerPlan
     }
 
     /// <summary>
+    /// Writes one plan into every container asked for.
+    /// </summary>
+    /// <param name="recipes">An expanded plan, from <see cref="Expand"/>.</param>
+    /// <param name="formats">The containers to write. One leaves the count unchanged.</param>
+    /// <returns>
+    /// The recipes stamped with a format, each appearing once per entry in
+    /// <paramref name="formats"/>.
+    /// </returns>
+    /// <remarks>
+    /// <para>
+    /// Corvus reads WebP and neither Unity nor MonoGame can open it, so a run serving both has to
+    /// write both. Multiplying here rather than in the view model is what keeps it testable without
+    /// a window, which is the same line <see cref="LayerPlan"/> already sits on.
+    /// </para>
+    /// <para>
+    /// No collision follows, because <see cref="SheetRecipe.RelativePath"/> takes its extension
+    /// from the format — which is why the geometry marking needs no format axis beside it.
+    /// </para>
+    /// </remarks>
+    public static ImmutableArray<SheetRecipe> InFormats(
+        ImmutableArray<SheetRecipe> recipes,
+        ReadOnlySpan<SheetFormat> formats)
+    {
+        if (recipes.IsDefaultOrEmpty || formats.Length is 0)
+        {
+            return [];
+        }
+
+        var stamped = ImmutableArray.CreateBuilder<SheetRecipe>(recipes.Length * formats.Length);
+
+        foreach (var format in formats)
+        {
+            foreach (var recipe in recipes)
+            {
+                stamped.Add(recipe with { Format = format });
+            }
+        }
+
+        return stamped.ToImmutable();
+    }
+
+    /// <summary>
     /// What <see cref="Expand"/> would produce, broken into its parts for the page's label.
     /// </summary>
     /// <param name="selections">What is ticked, one entry per slot.</param>
